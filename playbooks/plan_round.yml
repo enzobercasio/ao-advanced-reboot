@@ -1,0 +1,45 @@
+---
+- name: Plan one quorum-safe reboot round
+  hosts: all
+  gather_facts: false
+  run_once: true
+  vars_files:
+    - paths.yml
+  tasks:
+    - name: Load the service state
+      ansible.builtin.include_tasks: tasks/load_state.yml
+
+    - name: Select this round's batch
+      ansible.builtin.include_tasks: tasks/select_batch.yml
+
+    - name: Label the path this round should take
+      ansible.builtin.set_fact:
+        plan_out: "{{ plan_out | combine({'decision': decision}) }}"
+      vars:
+        decision: "{{ 'reboot' if (plan_out.selected_count | int) > 0 else ('blocked' if (plan_out.needs_reboot | int) > 0 else 'done') }}"
+
+    - name: Publish the plan
+      ansible.builtin.copy:
+        dest: "{{ plan_path }}"
+        mode: "0644"
+        content: "{{ plan_out | to_nice_json }}\n"
+
+    - name: Publish the plan to Automation Orchestrator
+      ansible.builtin.set_stats:
+        per_host: false
+        data: "{{ plan_out }}"
+
+    - name: Print the round header
+      ansible.builtin.debug:
+        msg: "PLAN round={{ plan_out.round }} needs_reboot={{ plan_out.needs_reboot }} selected={{ plan_out.selected_count }} max_eligible_sum={{ plan_out.max_eligible_sum }}"
+
+    - name: Print the round table
+      ansible.builtin.debug:
+        msg: "TABLE tier={{ item.tier }} instances={{ item.instances }} healthy={{ item.healthy }} needs_reboot={{ item.needs_reboot }} minimum={{ item.minimum }} rule={{ item.minimum_rule }} max_allowed={{ item.max_allowed }}"
+      loop: "{{ plan_out.rows }}"
+      loop_control:
+        label: "{{ item.tier }}"
+
+    - name: Print the batch in precedence order
+      ansible.builtin.debug:
+        msg: "ORDER shutdown=web,app,db startup=db,app,web shutdown_web={{ plan_out.shutdown_web | join(',') }} shutdown_app={{ plan_out.shutdown_app | join(',') }} shutdown_db={{ plan_out.shutdown_db | join(',') }}"

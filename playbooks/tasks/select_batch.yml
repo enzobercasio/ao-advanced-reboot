@@ -1,0 +1,39 @@
+- name: Select the safe batch for each tier
+  ansible.builtin.include_tasks: tasks/select_one_tier.yml
+  loop:
+    - web
+    - app
+    - db
+  loop_control:
+    loop_var: tier_key
+
+- name: Assemble the round plan
+  ansible.builtin.set_fact:
+    plan_out:
+      round: "{{ (svc.rounds_completed | int) + 1 }}"
+      needs_reboot: "{{ svc.hosts | selectattr('needs_reboot') | list | length | int }}"
+      selected_count: "{{ (shutdown_map.web | length) + (shutdown_map.app | length) + (shutdown_map.db | length) }}"
+      max_eligible_sum: "{{ round_rows | map(attribute='max_allowed') | map('int') | sum }}"
+      rows: "{{ round_rows }}"
+      shutdown_web: "{{ shutdown_map.web }}"
+      shutdown_app: "{{ shutdown_map.app }}"
+      shutdown_db: "{{ shutdown_map.db }}"
+      startup_db: "{{ shutdown_map.db }}"
+      startup_app: "{{ shutdown_map.app }}"
+      startup_web: "{{ shutdown_map.web }}"
+      shutdown_order:
+        - web
+        - app
+        - db
+      startup_order:
+        - db
+        - app
+        - web
+      shutdown_batches:
+        - {tier: web, hosts: "{{ shutdown_map.web }}"}
+        - {tier: app, hosts: "{{ shutdown_map.app }}"}
+        - {tier: db, hosts: "{{ shutdown_map.db }}"}
+      startup_batches:
+        - {tier: db, hosts: "{{ shutdown_map.db }}"}
+        - {tier: app, hosts: "{{ shutdown_map.app }}"}
+        - {tier: web, hosts: "{{ shutdown_map.web }}"}

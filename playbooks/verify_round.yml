@@ -1,0 +1,33 @@
+---
+- name: Recount hosts that still need a reboot
+  hosts: all
+  gather_facts: false
+  run_once: true
+  vars_files:
+    - paths.yml
+  tasks:
+    - name: Load the service state
+      ansible.builtin.include_tasks: tasks/load_state.yml
+
+    - name: Count hosts that still need a reboot
+      ansible.builtin.set_fact:
+        still_hosts: "{{ svc.hosts | selectattr('needs_reboot') | map(attribute='name') | list }}"
+        needs_reboot: "{{ svc.hosts | selectattr('needs_reboot') | list | length | int }}"
+
+    - name: Record that this round finished
+      ansible.builtin.copy:
+        dest: "{{ state_path }}"
+        mode: "0644"
+        content: "{{ svc | combine({'rounds_completed': (svc.rounds_completed | int) + 1}) | to_nice_json }}\n"
+
+    - name: Publish the recount
+      ansible.builtin.set_stats:
+        per_host: false
+        data:
+          needs_reboot: "{{ needs_reboot | int }}"
+          still_hosts: "{{ still_hosts }}"
+          gate: "{{ 'continue' if (needs_reboot | int) > 0 else 'done' }}"
+
+    - name: Print the recount
+      ansible.builtin.debug:
+        msg: "VERIFY needs_reboot={{ needs_reboot }} still={{ still_hosts | join(',') }}"

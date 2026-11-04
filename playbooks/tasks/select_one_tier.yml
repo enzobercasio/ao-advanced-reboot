@@ -1,0 +1,26 @@
+---
+- name: Hosts in this tier
+  ansible.builtin.set_fact:
+    tier_hosts: "{{ svc.hosts | selectattr('tier', 'equalto', tier_key) | list }}"
+
+- name: Floor for this tier
+  ansible.builtin.include_tasks: tasks/tier_floor.yml
+
+- name: Choose hosts that can leave this tier
+  ansible.builtin.set_fact:
+    round_rows: "{{ round_rows | default([]) + [row] }}"
+    shutdown_map: "{{ shutdown_map | default({}) | combine({tier_key: chosen}) }}"
+  vars:
+    healthy_count: "{{ tier_hosts | selectattr('healthy') | list | length }}"
+    needing: "{{ tier_hosts | selectattr('needs_reboot') | selectattr('healthy') | list }}"
+    room: "{{ [(healthy_count | int) - (minimum | int), 0] | max }}"
+    max_allowed: "{{ [needing | length, room | int] | min }}"
+    chosen: "{{ (needing | map(attribute='name') | list)[:(max_allowed | int)] }}"
+    row:
+      tier: "{{ tier_key }}"
+      instances: "{{ instance_count | int }}"
+      healthy: "{{ healthy_count | int }}"
+      needs_reboot: "{{ needing | length | int }}"
+      minimum: "{{ minimum | int }}"
+      minimum_rule: "{{ minimum_rule }}"
+      max_allowed: "{{ max_allowed | int }}"

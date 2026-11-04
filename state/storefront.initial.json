@@ -1,0 +1,23 @@
+{
+  "service": "storefront",
+  "rounds_completed": 0,
+  "fault": {
+    "host": "",
+    "step": "",
+    "tier": "",
+    "remaining": 0
+  },
+  "hosts": [
+    {"name": "web-01", "tier": "web", "healthy": true, "needs_reboot": true},
+    {"name": "web-02", "tier": "web", "healthy": true, "needs_reboot": true},
+    {"name": "web-03", "tier": "web", "healthy": true, "needs_reboot": true},
+    {"name": "web-04", "tier": "web", "healthy": true, "needs_reboot": true},
+    {"name": "app-01", "tier": "app", "healthy": true, "needs_reboot": true},
+    {"name": "app-02", "tier": "app", "healthy": true, "needs_reboot": true},
+    {"name": "app-03", "tier": "app", "healthy": true, "needs_reboot": true},
+    {"name": "app-04", "tier": "app", "healthy": true, "needs_reboot": true},
+    {"name": "db-01", "tier": "db", "healthy": true, "needs_reboot": true},
+    {"name": "db-02", "tier": "db", "healthy": true, "needs_reboot": true},
+    {"name": "db-03", "tier": "db", "healthy": true, "needs_reboot": true}
+  ]
+}

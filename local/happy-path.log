@@ -1,0 +1,1472 @@
+
+PLAY [Plan one quorum-safe reboot round] ***************************************
+
+TASK [Load the service state] **************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/load_state.yml for localhost
+
+TASK [Read the service state from the state host] ******************************
+ok: [localhost]
+
+TASK [Parse the service state] *************************************************
+ok: [localhost]
+
+TASK [Select this round's batch] ***********************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/select_batch.yml for localhost
+
+TASK [Select the safe batch for each tier] *************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/select_one_tier.yml for localhost => (item=web)
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/select_one_tier.yml for localhost => (item=app)
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/select_one_tier.yml for localhost => (item=db)
+
+TASK [Hosts in this tier] ******************************************************
+ok: [localhost]
+
+TASK [Floor for this tier] *****************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/tier_floor.yml for localhost
+
+TASK [Compute the floor from the instance count] *******************************
+ok: [localhost]
+
+TASK [Choose hosts that can leave this tier] ***********************************
+ok: [localhost]
+
+TASK [Hosts in this tier] ******************************************************
+ok: [localhost]
+
+TASK [Floor for this tier] *****************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/tier_floor.yml for localhost
+
+TASK [Compute the floor from the instance count] *******************************
+ok: [localhost]
+
+TASK [Choose hosts that can leave this tier] ***********************************
+ok: [localhost]
+
+TASK [Hosts in this tier] ******************************************************
+ok: [localhost]
+
+TASK [Floor for this tier] *****************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/tier_floor.yml for localhost
+
+TASK [Compute the floor from the instance count] *******************************
+ok: [localhost]
+
+TASK [Choose hosts that can leave this tier] ***********************************
+ok: [localhost]
+
+TASK [Assemble the round plan] *************************************************
+ok: [localhost]
+
+TASK [Label the path this round should take] ***********************************
+ok: [localhost]
+
+TASK [Publish the plan] ********************************************************
+changed: [localhost]
+
+TASK [Publish the plan to Automation Orchestrator] *****************************
+ok: [localhost]
+
+TASK [Print the round header] **************************************************
+ok: [localhost] => {
+    "msg": "PLAN round=1 needs_reboot=11 selected=6 max_eligible_sum=6"
+}
+
+TASK [Print the round table] ***************************************************
+ok: [localhost] => (item=web) => {
+    "msg": "TABLE tier=web instances=4 healthy=4 needs_reboot=4 minimum=1 rule=keep-1 max_allowed=3"
+}
+ok: [localhost] => (item=app) => {
+    "msg": "TABLE tier=app instances=4 healthy=4 needs_reboot=4 minimum=2 rule=keep-2 max_allowed=2"
+}
+ok: [localhost] => (item=db) => {
+    "msg": "TABLE tier=db instances=3 healthy=3 needs_reboot=3 minimum=2 rule=keep-count-minus-1 max_allowed=1"
+}
+
+TASK [Print the batch in precedence order] *************************************
+ok: [localhost] => {
+    "msg": "ORDER shutdown=web,app,db startup=db,app,web shutdown_web=web-01,web-02,web-03 shutdown_app=app-01,app-02 shutdown_db=db-01"
+}
+
+PLAY RECAP *********************************************************************
+localhost                  : ok=26   changed=1    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+
+[WARNING]: Host 'localhost' is using the discovered Python interpreter at '/opt/homebrew/bin/python3.14', but future installation of another Python interpreter could cause a different interpreter to be discovered. See https://docs.ansible.com/ansible-core/2.21/reference_appendices/interpreter_discovery.html for more information.
+LOGIC switch path=reboot
+LOGIC for-each shutdown_batches order=web,app,db
+
+PLAY [Shut down one tier of this round] ****************************************
+
+TASK [Require a tier name] *****************************************************
+ok: [localhost] => {
+    "changed": false,
+    "msg": "All assertions passed"
+}
+
+TASK [Load the service state] **************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/load_state.yml for localhost
+
+TASK [Read the service state from the state host] ******************************
+ok: [localhost]
+
+TASK [Parse the service state] *************************************************
+ok: [localhost]
+
+TASK [Normalise the host list] *************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/normalise_hosts.yml for localhost
+
+TASK [Normalise host_list to a list] *******************************************
+ok: [localhost]
+
+TASK [Decrement the fault counter before failing] ******************************
+skipping: [localhost]
+
+TASK [Fail this shutdown on purpose] *******************************************
+skipping: [localhost]
+
+TASK [No hosts in this tier for this round] ************************************
+skipping: [localhost]
+
+TASK [Shut down each selected host] ********************************************
+ok: [localhost] => (item=web-01) => {
+    "msg": "SHUTDOWN web-01 tier=web"
+}
+ok: [localhost] => (item=web-02) => {
+    "msg": "SHUTDOWN web-02 tier=web"
+}
+ok: [localhost] => (item=web-03) => {
+    "msg": "SHUTDOWN web-03 tier=web"
+}
+
+PLAY RECAP *********************************************************************
+localhost                  : ok=7    changed=0    unreachable=0    failed=0    skipped=3    rescued=0    ignored=0   
+
+[WARNING]: Host 'localhost' is using the discovered Python interpreter at '/opt/homebrew/bin/python3.14', but future installation of another Python interpreter could cause a different interpreter to be discovered. See https://docs.ansible.com/ansible-core/2.21/reference_appendices/interpreter_discovery.html for more information.
+
+PLAY [Shut down one tier of this round] ****************************************
+
+TASK [Require a tier name] *****************************************************
+ok: [localhost] => {
+    "changed": false,
+    "msg": "All assertions passed"
+}
+
+TASK [Load the service state] **************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/load_state.yml for localhost
+
+TASK [Read the service state from the state host] ******************************
+ok: [localhost]
+
+TASK [Parse the service state] *************************************************
+ok: [localhost]
+
+TASK [Normalise the host list] *************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/normalise_hosts.yml for localhost
+
+TASK [Normalise host_list to a list] *******************************************
+ok: [localhost]
+
+TASK [Decrement the fault counter before failing] ******************************
+skipping: [localhost]
+
+TASK [Fail this shutdown on purpose] *******************************************
+skipping: [localhost]
+
+TASK [No hosts in this tier for this round] ************************************
+skipping: [localhost]
+
+TASK [Shut down each selected host] ********************************************
+ok: [localhost] => (item=app-01) => {
+    "msg": "SHUTDOWN app-01 tier=app"
+}
+ok: [localhost] => (item=app-02) => {
+    "msg": "SHUTDOWN app-02 tier=app"
+}
+
+PLAY RECAP *********************************************************************
+localhost                  : ok=7    changed=0    unreachable=0    failed=0    skipped=3    rescued=0    ignored=0   
+
+[WARNING]: Host 'localhost' is using the discovered Python interpreter at '/opt/homebrew/bin/python3.14', but future installation of another Python interpreter could cause a different interpreter to be discovered. See https://docs.ansible.com/ansible-core/2.21/reference_appendices/interpreter_discovery.html for more information.
+
+PLAY [Shut down one tier of this round] ****************************************
+
+TASK [Require a tier name] *****************************************************
+ok: [localhost] => {
+    "changed": false,
+    "msg": "All assertions passed"
+}
+
+TASK [Load the service state] **************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/load_state.yml for localhost
+
+TASK [Read the service state from the state host] ******************************
+ok: [localhost]
+
+TASK [Parse the service state] *************************************************
+ok: [localhost]
+
+TASK [Normalise the host list] *************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/normalise_hosts.yml for localhost
+
+TASK [Normalise host_list to a list] *******************************************
+ok: [localhost]
+
+TASK [Decrement the fault counter before failing] ******************************
+skipping: [localhost]
+
+TASK [Fail this shutdown on purpose] *******************************************
+skipping: [localhost]
+
+TASK [No hosts in this tier for this round] ************************************
+skipping: [localhost]
+
+TASK [Shut down each selected host] ********************************************
+ok: [localhost] => (item=db-01) => {
+    "msg": "SHUTDOWN db-01 tier=db"
+}
+
+PLAY RECAP *********************************************************************
+localhost                  : ok=7    changed=0    unreachable=0    failed=0    skipped=3    rescued=0    ignored=0   
+
+[WARNING]: Host 'localhost' is using the discovered Python interpreter at '/opt/homebrew/bin/python3.14', but future installation of another Python interpreter could cause a different interpreter to be discovered. See https://docs.ansible.com/ansible-core/2.21/reference_appendices/interpreter_discovery.html for more information.
+LOGIC for-each startup_batches order=db,app,web
+
+PLAY [Start one tier of this round] ********************************************
+
+TASK [Require a tier name] *****************************************************
+ok: [localhost] => {
+    "changed": false,
+    "msg": "All assertions passed"
+}
+
+TASK [Load the service state] **************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/load_state.yml for localhost
+
+TASK [Read the service state from the state host] ******************************
+ok: [localhost]
+
+TASK [Parse the service state] *************************************************
+ok: [localhost]
+
+TASK [Normalise the host list] *************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/normalise_hosts.yml for localhost
+
+TASK [Normalise host_list to a list] *******************************************
+ok: [localhost]
+
+TASK [Clear needs_reboot for hosts that came back up] **************************
+ok: [localhost] => (item=web-01)
+ok: [localhost] => (item=web-02)
+ok: [localhost] => (item=web-03)
+ok: [localhost] => (item=web-04)
+ok: [localhost] => (item=app-01)
+ok: [localhost] => (item=app-02)
+ok: [localhost] => (item=app-03)
+ok: [localhost] => (item=app-04)
+ok: [localhost] => (item=db-01)
+ok: [localhost] => (item=db-02)
+ok: [localhost] => (item=db-03)
+
+TASK [Save the service state] **************************************************
+changed: [localhost]
+
+TASK [Publish the updated state] ***********************************************
+ok: [localhost]
+
+TASK [No hosts in this tier for this round] ************************************
+skipping: [localhost]
+
+TASK [Start each selected host] ************************************************
+ok: [localhost] => (item=db-01) => {
+    "msg": "STARTUP db-01 tier=db"
+}
+
+PLAY RECAP *********************************************************************
+localhost                  : ok=10   changed=1    unreachable=0    failed=0    skipped=1    rescued=0    ignored=0   
+
+[WARNING]: Host 'localhost' is using the discovered Python interpreter at '/opt/homebrew/bin/python3.14', but future installation of another Python interpreter could cause a different interpreter to be discovered. See https://docs.ansible.com/ansible-core/2.21/reference_appendices/interpreter_discovery.html for more information.
+
+PLAY [Start one tier of this round] ********************************************
+
+TASK [Require a tier name] *****************************************************
+ok: [localhost] => {
+    "changed": false,
+    "msg": "All assertions passed"
+}
+
+TASK [Load the service state] **************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/load_state.yml for localhost
+
+TASK [Read the service state from the state host] ******************************
+ok: [localhost]
+
+TASK [Parse the service state] *************************************************
+ok: [localhost]
+
+TASK [Normalise the host list] *************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/normalise_hosts.yml for localhost
+
+TASK [Normalise host_list to a list] *******************************************
+ok: [localhost]
+
+TASK [Clear needs_reboot for hosts that came back up] **************************
+ok: [localhost] => (item=web-01)
+ok: [localhost] => (item=web-02)
+ok: [localhost] => (item=web-03)
+ok: [localhost] => (item=web-04)
+ok: [localhost] => (item=app-01)
+ok: [localhost] => (item=app-02)
+ok: [localhost] => (item=app-03)
+ok: [localhost] => (item=app-04)
+ok: [localhost] => (item=db-01)
+ok: [localhost] => (item=db-02)
+ok: [localhost] => (item=db-03)
+
+TASK [Save the service state] **************************************************
+changed: [localhost]
+
+TASK [Publish the updated state] ***********************************************
+ok: [localhost]
+
+TASK [No hosts in this tier for this round] ************************************
+skipping: [localhost]
+
+TASK [Start each selected host] ************************************************
+ok: [localhost] => (item=app-01) => {
+    "msg": "STARTUP app-01 tier=app"
+}
+ok: [localhost] => (item=app-02) => {
+    "msg": "STARTUP app-02 tier=app"
+}
+
+PLAY RECAP *********************************************************************
+localhost                  : ok=10   changed=1    unreachable=0    failed=0    skipped=1    rescued=0    ignored=0   
+
+[WARNING]: Host 'localhost' is using the discovered Python interpreter at '/opt/homebrew/bin/python3.14', but future installation of another Python interpreter could cause a different interpreter to be discovered. See https://docs.ansible.com/ansible-core/2.21/reference_appendices/interpreter_discovery.html for more information.
+
+PLAY [Start one tier of this round] ********************************************
+
+TASK [Require a tier name] *****************************************************
+ok: [localhost] => {
+    "changed": false,
+    "msg": "All assertions passed"
+}
+
+TASK [Load the service state] **************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/load_state.yml for localhost
+
+TASK [Read the service state from the state host] ******************************
+ok: [localhost]
+
+TASK [Parse the service state] *************************************************
+ok: [localhost]
+
+TASK [Normalise the host list] *************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/normalise_hosts.yml for localhost
+
+TASK [Normalise host_list to a list] *******************************************
+ok: [localhost]
+
+TASK [Clear needs_reboot for hosts that came back up] **************************
+ok: [localhost] => (item=web-01)
+ok: [localhost] => (item=web-02)
+ok: [localhost] => (item=web-03)
+ok: [localhost] => (item=web-04)
+ok: [localhost] => (item=app-01)
+ok: [localhost] => (item=app-02)
+ok: [localhost] => (item=app-03)
+ok: [localhost] => (item=app-04)
+ok: [localhost] => (item=db-01)
+ok: [localhost] => (item=db-02)
+ok: [localhost] => (item=db-03)
+
+TASK [Save the service state] **************************************************
+changed: [localhost]
+
+TASK [Publish the updated state] ***********************************************
+ok: [localhost]
+
+TASK [No hosts in this tier for this round] ************************************
+skipping: [localhost]
+
+TASK [Start each selected host] ************************************************
+ok: [localhost] => (item=web-01) => {
+    "msg": "STARTUP web-01 tier=web"
+}
+ok: [localhost] => (item=web-02) => {
+    "msg": "STARTUP web-02 tier=web"
+}
+ok: [localhost] => (item=web-03) => {
+    "msg": "STARTUP web-03 tier=web"
+}
+
+PLAY RECAP *********************************************************************
+localhost                  : ok=10   changed=1    unreachable=0    failed=0    skipped=1    rescued=0    ignored=0   
+
+[WARNING]: Host 'localhost' is using the discovered Python interpreter at '/opt/homebrew/bin/python3.14', but future installation of another Python interpreter could cause a different interpreter to be discovered. See https://docs.ansible.com/ansible-core/2.21/reference_appendices/interpreter_discovery.html for more information.
+LOGIC parallel confirm_web confirm_app confirm_db
+
+PLAY [Report whether one tier is still at its minimum] *************************
+
+TASK [Require a tier name] *****************************************************
+ok: [localhost] => {
+    "changed": false,
+    "msg": "All assertions passed"
+}
+
+TASK [Load the service state] **************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/load_state.yml for localhost
+
+TASK [Read the service state from the state host] ******************************
+ok: [localhost]
+
+TASK [Parse the service state] *************************************************
+ok: [localhost]
+
+TASK [Count this tier] *********************************************************
+ok: [localhost]
+
+TASK [Floor for this tier] *****************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/tier_floor.yml for localhost
+
+TASK [Compute the floor from the instance count] *******************************
+ok: [localhost]
+
+TASK [Decide whether the tier still holds quorum] ******************************
+ok: [localhost]
+
+TASK [Publish the tier check] **************************************************
+ok: [localhost]
+
+TASK [Print the tier check] ****************************************************
+ok: [localhost] => {
+    "msg": "CONFIRM tier=web instances=4 healthy=4 minimum=1 rule=keep-1 quorum=held"
+}
+
+PLAY RECAP *********************************************************************
+localhost                  : ok=10   changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+
+[WARNING]: Host 'localhost' is using the discovered Python interpreter at '/opt/homebrew/bin/python3.14', but future installation of another Python interpreter could cause a different interpreter to be discovered. See https://docs.ansible.com/ansible-core/2.21/reference_appendices/interpreter_discovery.html for more information.
+
+PLAY [Report whether one tier is still at its minimum] *************************
+
+TASK [Require a tier name] *****************************************************
+ok: [localhost] => {
+    "changed": false,
+    "msg": "All assertions passed"
+}
+
+TASK [Load the service state] **************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/load_state.yml for localhost
+
+TASK [Read the service state from the state host] ******************************
+ok: [localhost]
+
+TASK [Parse the service state] *************************************************
+ok: [localhost]
+
+TASK [Count this tier] *********************************************************
+ok: [localhost]
+
+TASK [Floor for this tier] *****************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/tier_floor.yml for localhost
+
+TASK [Compute the floor from the instance count] *******************************
+ok: [localhost]
+
+TASK [Decide whether the tier still holds quorum] ******************************
+ok: [localhost]
+
+TASK [Publish the tier check] **************************************************
+ok: [localhost]
+
+TASK [Print the tier check] ****************************************************
+ok: [localhost] => {
+    "msg": "CONFIRM tier=app instances=4 healthy=4 minimum=2 rule=keep-2 quorum=held"
+}
+
+PLAY RECAP *********************************************************************
+localhost                  : ok=10   changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+
+[WARNING]: Host 'localhost' is using the discovered Python interpreter at '/opt/homebrew/bin/python3.14', but future installation of another Python interpreter could cause a different interpreter to be discovered. See https://docs.ansible.com/ansible-core/2.21/reference_appendices/interpreter_discovery.html for more information.
+
+PLAY [Report whether one tier is still at its minimum] *************************
+
+TASK [Require a tier name] *****************************************************
+ok: [localhost] => {
+    "changed": false,
+    "msg": "All assertions passed"
+}
+
+TASK [Load the service state] **************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/load_state.yml for localhost
+
+TASK [Read the service state from the state host] ******************************
+ok: [localhost]
+
+TASK [Parse the service state] *************************************************
+ok: [localhost]
+
+TASK [Count this tier] *********************************************************
+ok: [localhost]
+
+TASK [Floor for this tier] *****************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/tier_floor.yml for localhost
+
+TASK [Compute the floor from the instance count] *******************************
+ok: [localhost]
+
+TASK [Decide whether the tier still holds quorum] ******************************
+ok: [localhost]
+
+TASK [Publish the tier check] **************************************************
+ok: [localhost]
+
+TASK [Print the tier check] ****************************************************
+ok: [localhost] => {
+    "msg": "CONFIRM tier=db instances=3 healthy=3 minimum=2 rule=keep-count-minus-1 quorum=held"
+}
+
+PLAY RECAP *********************************************************************
+localhost                  : ok=10   changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+
+[WARNING]: Host 'localhost' is using the discovered Python interpreter at '/opt/homebrew/bin/python3.14', but future installation of another Python interpreter could cause a different interpreter to be discovered. See https://docs.ansible.com/ansible-core/2.21/reference_appendices/interpreter_discovery.html for more information.
+LOGIC converge all branches
+LOGIC condition still_safe true
+
+PLAY [Recount hosts that still need a reboot] **********************************
+
+TASK [Load the service state] **************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/load_state.yml for localhost
+
+TASK [Read the service state from the state host] ******************************
+ok: [localhost]
+
+TASK [Parse the service state] *************************************************
+ok: [localhost]
+
+TASK [Count hosts that still need a reboot] ************************************
+ok: [localhost]
+
+TASK [Record that this round finished] *****************************************
+changed: [localhost]
+
+TASK [Publish the recount] *****************************************************
+ok: [localhost]
+
+TASK [Print the recount] *******************************************************
+ok: [localhost] => {
+    "msg": "VERIFY needs_reboot=5 still=web-04,app-03,app-04,db-02,db-03"
+}
+
+PLAY RECAP *********************************************************************
+localhost                  : ok=7    changed=1    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+
+[WARNING]: Host 'localhost' is using the discovered Python interpreter at '/opt/homebrew/bin/python3.14', but future installation of another Python interpreter could cause a different interpreter to be discovered. See https://docs.ansible.com/ansible-core/2.21/reference_appendices/interpreter_discovery.html for more information.
+
+PLAY [Plan one quorum-safe reboot round] ***************************************
+
+TASK [Load the service state] **************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/load_state.yml for localhost
+
+TASK [Read the service state from the state host] ******************************
+ok: [localhost]
+
+TASK [Parse the service state] *************************************************
+ok: [localhost]
+
+TASK [Select this round's batch] ***********************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/select_batch.yml for localhost
+
+TASK [Select the safe batch for each tier] *************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/select_one_tier.yml for localhost => (item=web)
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/select_one_tier.yml for localhost => (item=app)
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/select_one_tier.yml for localhost => (item=db)
+
+TASK [Hosts in this tier] ******************************************************
+ok: [localhost]
+
+TASK [Floor for this tier] *****************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/tier_floor.yml for localhost
+
+TASK [Compute the floor from the instance count] *******************************
+ok: [localhost]
+
+TASK [Choose hosts that can leave this tier] ***********************************
+ok: [localhost]
+
+TASK [Hosts in this tier] ******************************************************
+ok: [localhost]
+
+TASK [Floor for this tier] *****************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/tier_floor.yml for localhost
+
+TASK [Compute the floor from the instance count] *******************************
+ok: [localhost]
+
+TASK [Choose hosts that can leave this tier] ***********************************
+ok: [localhost]
+
+TASK [Hosts in this tier] ******************************************************
+ok: [localhost]
+
+TASK [Floor for this tier] *****************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/tier_floor.yml for localhost
+
+TASK [Compute the floor from the instance count] *******************************
+ok: [localhost]
+
+TASK [Choose hosts that can leave this tier] ***********************************
+ok: [localhost]
+
+TASK [Assemble the round plan] *************************************************
+ok: [localhost]
+
+TASK [Label the path this round should take] ***********************************
+ok: [localhost]
+
+TASK [Publish the plan] ********************************************************
+changed: [localhost]
+
+TASK [Publish the plan to Automation Orchestrator] *****************************
+ok: [localhost]
+
+TASK [Print the round header] **************************************************
+ok: [localhost] => {
+    "msg": "PLAN round=2 needs_reboot=5 selected=4 max_eligible_sum=4"
+}
+
+TASK [Print the round table] ***************************************************
+ok: [localhost] => (item=web) => {
+    "msg": "TABLE tier=web instances=4 healthy=4 needs_reboot=1 minimum=1 rule=keep-1 max_allowed=1"
+}
+ok: [localhost] => (item=app) => {
+    "msg": "TABLE tier=app instances=4 healthy=4 needs_reboot=2 minimum=2 rule=keep-2 max_allowed=2"
+}
+ok: [localhost] => (item=db) => {
+    "msg": "TABLE tier=db instances=3 healthy=3 needs_reboot=2 minimum=2 rule=keep-count-minus-1 max_allowed=1"
+}
+
+TASK [Print the batch in precedence order] *************************************
+ok: [localhost] => {
+    "msg": "ORDER shutdown=web,app,db startup=db,app,web shutdown_web=web-04 shutdown_app=app-03,app-04 shutdown_db=db-02"
+}
+
+PLAY RECAP *********************************************************************
+localhost                  : ok=26   changed=1    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+
+[WARNING]: Host 'localhost' is using the discovered Python interpreter at '/opt/homebrew/bin/python3.14', but future installation of another Python interpreter could cause a different interpreter to be discovered. See https://docs.ansible.com/ansible-core/2.21/reference_appendices/interpreter_discovery.html for more information.
+LOGIC switch path=reboot
+LOGIC for-each shutdown_batches order=web,app,db
+
+PLAY [Shut down one tier of this round] ****************************************
+
+TASK [Require a tier name] *****************************************************
+ok: [localhost] => {
+    "changed": false,
+    "msg": "All assertions passed"
+}
+
+TASK [Load the service state] **************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/load_state.yml for localhost
+
+TASK [Read the service state from the state host] ******************************
+ok: [localhost]
+
+TASK [Parse the service state] *************************************************
+ok: [localhost]
+
+TASK [Normalise the host list] *************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/normalise_hosts.yml for localhost
+
+TASK [Normalise host_list to a list] *******************************************
+ok: [localhost]
+
+TASK [Decrement the fault counter before failing] ******************************
+skipping: [localhost]
+
+TASK [Fail this shutdown on purpose] *******************************************
+skipping: [localhost]
+
+TASK [No hosts in this tier for this round] ************************************
+skipping: [localhost]
+
+TASK [Shut down each selected host] ********************************************
+ok: [localhost] => (item=web-04) => {
+    "msg": "SHUTDOWN web-04 tier=web"
+}
+
+PLAY RECAP *********************************************************************
+localhost                  : ok=7    changed=0    unreachable=0    failed=0    skipped=3    rescued=0    ignored=0   
+
+[WARNING]: Host 'localhost' is using the discovered Python interpreter at '/opt/homebrew/bin/python3.14', but future installation of another Python interpreter could cause a different interpreter to be discovered. See https://docs.ansible.com/ansible-core/2.21/reference_appendices/interpreter_discovery.html for more information.
+
+PLAY [Shut down one tier of this round] ****************************************
+
+TASK [Require a tier name] *****************************************************
+ok: [localhost] => {
+    "changed": false,
+    "msg": "All assertions passed"
+}
+
+TASK [Load the service state] **************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/load_state.yml for localhost
+
+TASK [Read the service state from the state host] ******************************
+ok: [localhost]
+
+TASK [Parse the service state] *************************************************
+ok: [localhost]
+
+TASK [Normalise the host list] *************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/normalise_hosts.yml for localhost
+
+TASK [Normalise host_list to a list] *******************************************
+ok: [localhost]
+
+TASK [Decrement the fault counter before failing] ******************************
+skipping: [localhost]
+
+TASK [Fail this shutdown on purpose] *******************************************
+skipping: [localhost]
+
+TASK [No hosts in this tier for this round] ************************************
+skipping: [localhost]
+
+TASK [Shut down each selected host] ********************************************
+ok: [localhost] => (item=app-03) => {
+    "msg": "SHUTDOWN app-03 tier=app"
+}
+ok: [localhost] => (item=app-04) => {
+    "msg": "SHUTDOWN app-04 tier=app"
+}
+
+PLAY RECAP *********************************************************************
+localhost                  : ok=7    changed=0    unreachable=0    failed=0    skipped=3    rescued=0    ignored=0   
+
+[WARNING]: Host 'localhost' is using the discovered Python interpreter at '/opt/homebrew/bin/python3.14', but future installation of another Python interpreter could cause a different interpreter to be discovered. See https://docs.ansible.com/ansible-core/2.21/reference_appendices/interpreter_discovery.html for more information.
+
+PLAY [Shut down one tier of this round] ****************************************
+
+TASK [Require a tier name] *****************************************************
+ok: [localhost] => {
+    "changed": false,
+    "msg": "All assertions passed"
+}
+
+TASK [Load the service state] **************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/load_state.yml for localhost
+
+TASK [Read the service state from the state host] ******************************
+ok: [localhost]
+
+TASK [Parse the service state] *************************************************
+ok: [localhost]
+
+TASK [Normalise the host list] *************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/normalise_hosts.yml for localhost
+
+TASK [Normalise host_list to a list] *******************************************
+ok: [localhost]
+
+TASK [Decrement the fault counter before failing] ******************************
+skipping: [localhost]
+
+TASK [Fail this shutdown on purpose] *******************************************
+skipping: [localhost]
+
+TASK [No hosts in this tier for this round] ************************************
+skipping: [localhost]
+
+TASK [Shut down each selected host] ********************************************
+ok: [localhost] => (item=db-02) => {
+    "msg": "SHUTDOWN db-02 tier=db"
+}
+
+PLAY RECAP *********************************************************************
+localhost                  : ok=7    changed=0    unreachable=0    failed=0    skipped=3    rescued=0    ignored=0   
+
+[WARNING]: Host 'localhost' is using the discovered Python interpreter at '/opt/homebrew/bin/python3.14', but future installation of another Python interpreter could cause a different interpreter to be discovered. See https://docs.ansible.com/ansible-core/2.21/reference_appendices/interpreter_discovery.html for more information.
+LOGIC for-each startup_batches order=db,app,web
+
+PLAY [Start one tier of this round] ********************************************
+
+TASK [Require a tier name] *****************************************************
+ok: [localhost] => {
+    "changed": false,
+    "msg": "All assertions passed"
+}
+
+TASK [Load the service state] **************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/load_state.yml for localhost
+
+TASK [Read the service state from the state host] ******************************
+ok: [localhost]
+
+TASK [Parse the service state] *************************************************
+ok: [localhost]
+
+TASK [Normalise the host list] *************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/normalise_hosts.yml for localhost
+
+TASK [Normalise host_list to a list] *******************************************
+ok: [localhost]
+
+TASK [Clear needs_reboot for hosts that came back up] **************************
+ok: [localhost] => (item=web-01)
+ok: [localhost] => (item=web-02)
+ok: [localhost] => (item=web-03)
+ok: [localhost] => (item=web-04)
+ok: [localhost] => (item=app-01)
+ok: [localhost] => (item=app-02)
+ok: [localhost] => (item=app-03)
+ok: [localhost] => (item=app-04)
+ok: [localhost] => (item=db-01)
+ok: [localhost] => (item=db-02)
+ok: [localhost] => (item=db-03)
+
+TASK [Save the service state] **************************************************
+changed: [localhost]
+
+TASK [Publish the updated state] ***********************************************
+ok: [localhost]
+
+TASK [No hosts in this tier for this round] ************************************
+skipping: [localhost]
+
+TASK [Start each selected host] ************************************************
+ok: [localhost] => (item=db-02) => {
+    "msg": "STARTUP db-02 tier=db"
+}
+
+PLAY RECAP *********************************************************************
+localhost                  : ok=10   changed=1    unreachable=0    failed=0    skipped=1    rescued=0    ignored=0   
+
+[WARNING]: Host 'localhost' is using the discovered Python interpreter at '/opt/homebrew/bin/python3.14', but future installation of another Python interpreter could cause a different interpreter to be discovered. See https://docs.ansible.com/ansible-core/2.21/reference_appendices/interpreter_discovery.html for more information.
+
+PLAY [Start one tier of this round] ********************************************
+
+TASK [Require a tier name] *****************************************************
+ok: [localhost] => {
+    "changed": false,
+    "msg": "All assertions passed"
+}
+
+TASK [Load the service state] **************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/load_state.yml for localhost
+
+TASK [Read the service state from the state host] ******************************
+ok: [localhost]
+
+TASK [Parse the service state] *************************************************
+ok: [localhost]
+
+TASK [Normalise the host list] *************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/normalise_hosts.yml for localhost
+
+TASK [Normalise host_list to a list] *******************************************
+ok: [localhost]
+
+TASK [Clear needs_reboot for hosts that came back up] **************************
+ok: [localhost] => (item=web-01)
+ok: [localhost] => (item=web-02)
+ok: [localhost] => (item=web-03)
+ok: [localhost] => (item=web-04)
+ok: [localhost] => (item=app-01)
+ok: [localhost] => (item=app-02)
+ok: [localhost] => (item=app-03)
+ok: [localhost] => (item=app-04)
+ok: [localhost] => (item=db-01)
+ok: [localhost] => (item=db-02)
+ok: [localhost] => (item=db-03)
+
+TASK [Save the service state] **************************************************
+changed: [localhost]
+
+TASK [Publish the updated state] ***********************************************
+ok: [localhost]
+
+TASK [No hosts in this tier for this round] ************************************
+skipping: [localhost]
+
+TASK [Start each selected host] ************************************************
+ok: [localhost] => (item=app-03) => {
+    "msg": "STARTUP app-03 tier=app"
+}
+ok: [localhost] => (item=app-04) => {
+    "msg": "STARTUP app-04 tier=app"
+}
+
+PLAY RECAP *********************************************************************
+localhost                  : ok=10   changed=1    unreachable=0    failed=0    skipped=1    rescued=0    ignored=0   
+
+[WARNING]: Host 'localhost' is using the discovered Python interpreter at '/opt/homebrew/bin/python3.14', but future installation of another Python interpreter could cause a different interpreter to be discovered. See https://docs.ansible.com/ansible-core/2.21/reference_appendices/interpreter_discovery.html for more information.
+
+PLAY [Start one tier of this round] ********************************************
+
+TASK [Require a tier name] *****************************************************
+ok: [localhost] => {
+    "changed": false,
+    "msg": "All assertions passed"
+}
+
+TASK [Load the service state] **************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/load_state.yml for localhost
+
+TASK [Read the service state from the state host] ******************************
+ok: [localhost]
+
+TASK [Parse the service state] *************************************************
+ok: [localhost]
+
+TASK [Normalise the host list] *************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/normalise_hosts.yml for localhost
+
+TASK [Normalise host_list to a list] *******************************************
+ok: [localhost]
+
+TASK [Clear needs_reboot for hosts that came back up] **************************
+ok: [localhost] => (item=web-01)
+ok: [localhost] => (item=web-02)
+ok: [localhost] => (item=web-03)
+ok: [localhost] => (item=web-04)
+ok: [localhost] => (item=app-01)
+ok: [localhost] => (item=app-02)
+ok: [localhost] => (item=app-03)
+ok: [localhost] => (item=app-04)
+ok: [localhost] => (item=db-01)
+ok: [localhost] => (item=db-02)
+ok: [localhost] => (item=db-03)
+
+TASK [Save the service state] **************************************************
+changed: [localhost]
+
+TASK [Publish the updated state] ***********************************************
+ok: [localhost]
+
+TASK [No hosts in this tier for this round] ************************************
+skipping: [localhost]
+
+TASK [Start each selected host] ************************************************
+ok: [localhost] => (item=web-04) => {
+    "msg": "STARTUP web-04 tier=web"
+}
+
+PLAY RECAP *********************************************************************
+localhost                  : ok=10   changed=1    unreachable=0    failed=0    skipped=1    rescued=0    ignored=0   
+
+[WARNING]: Host 'localhost' is using the discovered Python interpreter at '/opt/homebrew/bin/python3.14', but future installation of another Python interpreter could cause a different interpreter to be discovered. See https://docs.ansible.com/ansible-core/2.21/reference_appendices/interpreter_discovery.html for more information.
+LOGIC parallel confirm_web confirm_app confirm_db
+
+PLAY [Report whether one tier is still at its minimum] *************************
+
+TASK [Require a tier name] *****************************************************
+ok: [localhost] => {
+    "changed": false,
+    "msg": "All assertions passed"
+}
+
+TASK [Load the service state] **************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/load_state.yml for localhost
+
+TASK [Read the service state from the state host] ******************************
+ok: [localhost]
+
+TASK [Parse the service state] *************************************************
+ok: [localhost]
+
+TASK [Count this tier] *********************************************************
+ok: [localhost]
+
+TASK [Floor for this tier] *****************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/tier_floor.yml for localhost
+
+TASK [Compute the floor from the instance count] *******************************
+ok: [localhost]
+
+TASK [Decide whether the tier still holds quorum] ******************************
+ok: [localhost]
+
+TASK [Publish the tier check] **************************************************
+ok: [localhost]
+
+TASK [Print the tier check] ****************************************************
+ok: [localhost] => {
+    "msg": "CONFIRM tier=web instances=4 healthy=4 minimum=1 rule=keep-1 quorum=held"
+}
+
+PLAY RECAP *********************************************************************
+localhost                  : ok=10   changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+
+[WARNING]: Host 'localhost' is using the discovered Python interpreter at '/opt/homebrew/bin/python3.14', but future installation of another Python interpreter could cause a different interpreter to be discovered. See https://docs.ansible.com/ansible-core/2.21/reference_appendices/interpreter_discovery.html for more information.
+
+PLAY [Report whether one tier is still at its minimum] *************************
+
+TASK [Require a tier name] *****************************************************
+ok: [localhost] => {
+    "changed": false,
+    "msg": "All assertions passed"
+}
+
+TASK [Load the service state] **************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/load_state.yml for localhost
+
+TASK [Read the service state from the state host] ******************************
+ok: [localhost]
+
+TASK [Parse the service state] *************************************************
+ok: [localhost]
+
+TASK [Count this tier] *********************************************************
+ok: [localhost]
+
+TASK [Floor for this tier] *****************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/tier_floor.yml for localhost
+
+TASK [Compute the floor from the instance count] *******************************
+ok: [localhost]
+
+TASK [Decide whether the tier still holds quorum] ******************************
+ok: [localhost]
+
+TASK [Publish the tier check] **************************************************
+ok: [localhost]
+
+TASK [Print the tier check] ****************************************************
+ok: [localhost] => {
+    "msg": "CONFIRM tier=app instances=4 healthy=4 minimum=2 rule=keep-2 quorum=held"
+}
+
+PLAY RECAP *********************************************************************
+localhost                  : ok=10   changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+
+[WARNING]: Host 'localhost' is using the discovered Python interpreter at '/opt/homebrew/bin/python3.14', but future installation of another Python interpreter could cause a different interpreter to be discovered. See https://docs.ansible.com/ansible-core/2.21/reference_appendices/interpreter_discovery.html for more information.
+
+PLAY [Report whether one tier is still at its minimum] *************************
+
+TASK [Require a tier name] *****************************************************
+ok: [localhost] => {
+    "changed": false,
+    "msg": "All assertions passed"
+}
+
+TASK [Load the service state] **************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/load_state.yml for localhost
+
+TASK [Read the service state from the state host] ******************************
+ok: [localhost]
+
+TASK [Parse the service state] *************************************************
+ok: [localhost]
+
+TASK [Count this tier] *********************************************************
+ok: [localhost]
+
+TASK [Floor for this tier] *****************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/tier_floor.yml for localhost
+
+TASK [Compute the floor from the instance count] *******************************
+ok: [localhost]
+
+TASK [Decide whether the tier still holds quorum] ******************************
+ok: [localhost]
+
+TASK [Publish the tier check] **************************************************
+ok: [localhost]
+
+TASK [Print the tier check] ****************************************************
+ok: [localhost] => {
+    "msg": "CONFIRM tier=db instances=3 healthy=3 minimum=2 rule=keep-count-minus-1 quorum=held"
+}
+
+PLAY RECAP *********************************************************************
+localhost                  : ok=10   changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+
+[WARNING]: Host 'localhost' is using the discovered Python interpreter at '/opt/homebrew/bin/python3.14', but future installation of another Python interpreter could cause a different interpreter to be discovered. See https://docs.ansible.com/ansible-core/2.21/reference_appendices/interpreter_discovery.html for more information.
+LOGIC converge all branches
+LOGIC condition still_safe true
+
+PLAY [Recount hosts that still need a reboot] **********************************
+
+TASK [Load the service state] **************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/load_state.yml for localhost
+
+TASK [Read the service state from the state host] ******************************
+ok: [localhost]
+
+TASK [Parse the service state] *************************************************
+ok: [localhost]
+
+TASK [Count hosts that still need a reboot] ************************************
+ok: [localhost]
+
+TASK [Record that this round finished] *****************************************
+changed: [localhost]
+
+TASK [Publish the recount] *****************************************************
+ok: [localhost]
+
+TASK [Print the recount] *******************************************************
+ok: [localhost] => {
+    "msg": "VERIFY needs_reboot=1 still=db-03"
+}
+
+PLAY RECAP *********************************************************************
+localhost                  : ok=7    changed=1    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+
+[WARNING]: Host 'localhost' is using the discovered Python interpreter at '/opt/homebrew/bin/python3.14', but future installation of another Python interpreter could cause a different interpreter to be discovered. See https://docs.ansible.com/ansible-core/2.21/reference_appendices/interpreter_discovery.html for more information.
+
+PLAY [Plan one quorum-safe reboot round] ***************************************
+
+TASK [Load the service state] **************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/load_state.yml for localhost
+
+TASK [Read the service state from the state host] ******************************
+ok: [localhost]
+
+TASK [Parse the service state] *************************************************
+ok: [localhost]
+
+TASK [Select this round's batch] ***********************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/select_batch.yml for localhost
+
+TASK [Select the safe batch for each tier] *************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/select_one_tier.yml for localhost => (item=web)
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/select_one_tier.yml for localhost => (item=app)
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/select_one_tier.yml for localhost => (item=db)
+
+TASK [Hosts in this tier] ******************************************************
+ok: [localhost]
+
+TASK [Floor for this tier] *****************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/tier_floor.yml for localhost
+
+TASK [Compute the floor from the instance count] *******************************
+ok: [localhost]
+
+TASK [Choose hosts that can leave this tier] ***********************************
+ok: [localhost]
+
+TASK [Hosts in this tier] ******************************************************
+ok: [localhost]
+
+TASK [Floor for this tier] *****************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/tier_floor.yml for localhost
+
+TASK [Compute the floor from the instance count] *******************************
+ok: [localhost]
+
+TASK [Choose hosts that can leave this tier] ***********************************
+ok: [localhost]
+
+TASK [Hosts in this tier] ******************************************************
+ok: [localhost]
+
+TASK [Floor for this tier] *****************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/tier_floor.yml for localhost
+
+TASK [Compute the floor from the instance count] *******************************
+ok: [localhost]
+
+TASK [Choose hosts that can leave this tier] ***********************************
+ok: [localhost]
+
+TASK [Assemble the round plan] *************************************************
+ok: [localhost]
+
+TASK [Label the path this round should take] ***********************************
+ok: [localhost]
+
+TASK [Publish the plan] ********************************************************
+changed: [localhost]
+
+TASK [Publish the plan to Automation Orchestrator] *****************************
+ok: [localhost]
+
+TASK [Print the round header] **************************************************
+ok: [localhost] => {
+    "msg": "PLAN round=3 needs_reboot=1 selected=1 max_eligible_sum=1"
+}
+
+TASK [Print the round table] ***************************************************
+ok: [localhost] => (item=web) => {
+    "msg": "TABLE tier=web instances=4 healthy=4 needs_reboot=0 minimum=1 rule=keep-1 max_allowed=0"
+}
+ok: [localhost] => (item=app) => {
+    "msg": "TABLE tier=app instances=4 healthy=4 needs_reboot=0 minimum=2 rule=keep-2 max_allowed=0"
+}
+ok: [localhost] => (item=db) => {
+    "msg": "TABLE tier=db instances=3 healthy=3 needs_reboot=1 minimum=2 rule=keep-count-minus-1 max_allowed=1"
+}
+
+TASK [Print the batch in precedence order] *************************************
+ok: [localhost] => {
+    "msg": "ORDER shutdown=web,app,db startup=db,app,web shutdown_web= shutdown_app= shutdown_db=db-03"
+}
+
+PLAY RECAP *********************************************************************
+localhost                  : ok=26   changed=1    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+
+[WARNING]: Host 'localhost' is using the discovered Python interpreter at '/opt/homebrew/bin/python3.14', but future installation of another Python interpreter could cause a different interpreter to be discovered. See https://docs.ansible.com/ansible-core/2.21/reference_appendices/interpreter_discovery.html for more information.
+LOGIC switch path=reboot
+LOGIC for-each shutdown_batches order=web,app,db
+LOGIC condition false: skip shutdown tier=web (empty host list)
+LOGIC condition false: skip shutdown tier=app (empty host list)
+
+PLAY [Shut down one tier of this round] ****************************************
+
+TASK [Require a tier name] *****************************************************
+ok: [localhost] => {
+    "changed": false,
+    "msg": "All assertions passed"
+}
+
+TASK [Load the service state] **************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/load_state.yml for localhost
+
+TASK [Read the service state from the state host] ******************************
+ok: [localhost]
+
+TASK [Parse the service state] *************************************************
+ok: [localhost]
+
+TASK [Normalise the host list] *************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/normalise_hosts.yml for localhost
+
+TASK [Normalise host_list to a list] *******************************************
+ok: [localhost]
+
+TASK [Decrement the fault counter before failing] ******************************
+skipping: [localhost]
+
+TASK [Fail this shutdown on purpose] *******************************************
+skipping: [localhost]
+
+TASK [No hosts in this tier for this round] ************************************
+skipping: [localhost]
+
+TASK [Shut down each selected host] ********************************************
+ok: [localhost] => (item=db-03) => {
+    "msg": "SHUTDOWN db-03 tier=db"
+}
+
+PLAY RECAP *********************************************************************
+localhost                  : ok=7    changed=0    unreachable=0    failed=0    skipped=3    rescued=0    ignored=0   
+
+[WARNING]: Host 'localhost' is using the discovered Python interpreter at '/opt/homebrew/bin/python3.14', but future installation of another Python interpreter could cause a different interpreter to be discovered. See https://docs.ansible.com/ansible-core/2.21/reference_appendices/interpreter_discovery.html for more information.
+LOGIC for-each startup_batches order=db,app,web
+
+PLAY [Start one tier of this round] ********************************************
+
+TASK [Require a tier name] *****************************************************
+ok: [localhost] => {
+    "changed": false,
+    "msg": "All assertions passed"
+}
+
+TASK [Load the service state] **************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/load_state.yml for localhost
+
+TASK [Read the service state from the state host] ******************************
+ok: [localhost]
+
+TASK [Parse the service state] *************************************************
+ok: [localhost]
+
+TASK [Normalise the host list] *************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/normalise_hosts.yml for localhost
+
+TASK [Normalise host_list to a list] *******************************************
+ok: [localhost]
+
+TASK [Clear needs_reboot for hosts that came back up] **************************
+ok: [localhost] => (item=web-01)
+ok: [localhost] => (item=web-02)
+ok: [localhost] => (item=web-03)
+ok: [localhost] => (item=web-04)
+ok: [localhost] => (item=app-01)
+ok: [localhost] => (item=app-02)
+ok: [localhost] => (item=app-03)
+ok: [localhost] => (item=app-04)
+ok: [localhost] => (item=db-01)
+ok: [localhost] => (item=db-02)
+ok: [localhost] => (item=db-03)
+
+TASK [Save the service state] **************************************************
+changed: [localhost]
+
+TASK [Publish the updated state] ***********************************************
+ok: [localhost]
+
+TASK [No hosts in this tier for this round] ************************************
+skipping: [localhost]
+
+TASK [Start each selected host] ************************************************
+ok: [localhost] => (item=db-03) => {
+    "msg": "STARTUP db-03 tier=db"
+}
+
+PLAY RECAP *********************************************************************
+localhost                  : ok=10   changed=1    unreachable=0    failed=0    skipped=1    rescued=0    ignored=0   
+
+[WARNING]: Host 'localhost' is using the discovered Python interpreter at '/opt/homebrew/bin/python3.14', but future installation of another Python interpreter could cause a different interpreter to be discovered. See https://docs.ansible.com/ansible-core/2.21/reference_appendices/interpreter_discovery.html for more information.
+LOGIC condition false: skip startup tier=app (empty host list)
+LOGIC condition false: skip startup tier=web (empty host list)
+LOGIC parallel confirm_web confirm_app confirm_db
+
+PLAY [Report whether one tier is still at its minimum] *************************
+
+TASK [Require a tier name] *****************************************************
+ok: [localhost] => {
+    "changed": false,
+    "msg": "All assertions passed"
+}
+
+TASK [Load the service state] **************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/load_state.yml for localhost
+
+TASK [Read the service state from the state host] ******************************
+ok: [localhost]
+
+TASK [Parse the service state] *************************************************
+ok: [localhost]
+
+TASK [Count this tier] *********************************************************
+ok: [localhost]
+
+TASK [Floor for this tier] *****************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/tier_floor.yml for localhost
+
+TASK [Compute the floor from the instance count] *******************************
+ok: [localhost]
+
+TASK [Decide whether the tier still holds quorum] ******************************
+ok: [localhost]
+
+TASK [Publish the tier check] **************************************************
+ok: [localhost]
+
+TASK [Print the tier check] ****************************************************
+ok: [localhost] => {
+    "msg": "CONFIRM tier=web instances=4 healthy=4 minimum=1 rule=keep-1 quorum=held"
+}
+
+PLAY RECAP *********************************************************************
+localhost                  : ok=10   changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+
+[WARNING]: Host 'localhost' is using the discovered Python interpreter at '/opt/homebrew/bin/python3.14', but future installation of another Python interpreter could cause a different interpreter to be discovered. See https://docs.ansible.com/ansible-core/2.21/reference_appendices/interpreter_discovery.html for more information.
+
+PLAY [Report whether one tier is still at its minimum] *************************
+
+TASK [Require a tier name] *****************************************************
+ok: [localhost] => {
+    "changed": false,
+    "msg": "All assertions passed"
+}
+
+TASK [Load the service state] **************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/load_state.yml for localhost
+
+TASK [Read the service state from the state host] ******************************
+ok: [localhost]
+
+TASK [Parse the service state] *************************************************
+ok: [localhost]
+
+TASK [Count this tier] *********************************************************
+ok: [localhost]
+
+TASK [Floor for this tier] *****************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/tier_floor.yml for localhost
+
+TASK [Compute the floor from the instance count] *******************************
+ok: [localhost]
+
+TASK [Decide whether the tier still holds quorum] ******************************
+ok: [localhost]
+
+TASK [Publish the tier check] **************************************************
+ok: [localhost]
+
+TASK [Print the tier check] ****************************************************
+ok: [localhost] => {
+    "msg": "CONFIRM tier=app instances=4 healthy=4 minimum=2 rule=keep-2 quorum=held"
+}
+
+PLAY RECAP *********************************************************************
+localhost                  : ok=10   changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+
+[WARNING]: Host 'localhost' is using the discovered Python interpreter at '/opt/homebrew/bin/python3.14', but future installation of another Python interpreter could cause a different interpreter to be discovered. See https://docs.ansible.com/ansible-core/2.21/reference_appendices/interpreter_discovery.html for more information.
+
+PLAY [Report whether one tier is still at its minimum] *************************
+
+TASK [Require a tier name] *****************************************************
+ok: [localhost] => {
+    "changed": false,
+    "msg": "All assertions passed"
+}
+
+TASK [Load the service state] **************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/load_state.yml for localhost
+
+TASK [Read the service state from the state host] ******************************
+ok: [localhost]
+
+TASK [Parse the service state] *************************************************
+ok: [localhost]
+
+TASK [Count this tier] *********************************************************
+ok: [localhost]
+
+TASK [Floor for this tier] *****************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/tier_floor.yml for localhost
+
+TASK [Compute the floor from the instance count] *******************************
+ok: [localhost]
+
+TASK [Decide whether the tier still holds quorum] ******************************
+ok: [localhost]
+
+TASK [Publish the tier check] **************************************************
+ok: [localhost]
+
+TASK [Print the tier check] ****************************************************
+ok: [localhost] => {
+    "msg": "CONFIRM tier=db instances=3 healthy=3 minimum=2 rule=keep-count-minus-1 quorum=held"
+}
+
+PLAY RECAP *********************************************************************
+localhost                  : ok=10   changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+
+[WARNING]: Host 'localhost' is using the discovered Python interpreter at '/opt/homebrew/bin/python3.14', but future installation of another Python interpreter could cause a different interpreter to be discovered. See https://docs.ansible.com/ansible-core/2.21/reference_appendices/interpreter_discovery.html for more information.
+LOGIC converge all branches
+LOGIC condition still_safe true
+
+PLAY [Recount hosts that still need a reboot] **********************************
+
+TASK [Load the service state] **************************************************
+included: /Users/lbercasi/all-repo/automation/saa-assistant/adoption-architect-skills/demo-assets/ao-advanced-reboot/playbooks/tasks/load_state.yml for localhost
+
+TASK [Read the service state from the state host] ******************************
+ok: [localhost]
+
+TASK [Parse the service state] *************************************************
+ok: [localhost]
+
+TASK [Count hosts that still need a reboot] ************************************
+ok: [localhost]
+
+TASK [Record that this round finished] *****************************************
+changed: [localhost]
+
+TASK [Publish the recount] *****************************************************
+ok: [localhost]
+
+TASK [Print the recount] *******************************************************
+ok: [localhost] => {
+    "msg": "VERIFY needs_reboot=0 still="
+}
+
+PLAY RECAP *********************************************************************
+localhost                  : ok=7    changed=1    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+
+[WARNING]: Host 'localhost' is using the discovered Python interpreter at '/opt/homebrew/bin/python3.14', but future installation of another Python interpreter could cause a different interpreter to be discovered. See https://docs.ansible.com/ansible-core/2.21/reference_appendices/interpreter_discovery.html for more information.

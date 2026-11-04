@@ -1,0 +1,9 @@
+---
+- name: Sit each tier on its floor
+  ansible.builtin.include_tasks: tasks/floor_tier_hosts.yml
+  loop:
+    - web
+    - app
+    - db
+  loop_control:
+    loop_var: tier_key

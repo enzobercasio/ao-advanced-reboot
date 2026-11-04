@@ -1,0 +1,41 @@
+---
+- name: Report whether one tier is still at its minimum
+  hosts: all
+  gather_facts: false
+  run_once: true
+  vars_files:
+    - paths.yml
+  tasks:
+    - name: Require a tier name
+      ansible.builtin.assert:
+        that: tier_name in ['web', 'app', 'db']
+        fail_msg: "Pass tier_name as web, app, or db."
+
+    - name: Load the service state
+      ansible.builtin.include_tasks: tasks/load_state.yml
+
+    - name: Count this tier
+      ansible.builtin.set_fact:
+        tier_hosts: "{{ svc.hosts | selectattr('tier', 'equalto', tier_name) | list }}"
+        tier_key: "{{ tier_name }}"
+
+    - name: Floor for this tier
+      ansible.builtin.include_tasks: tasks/tier_floor.yml
+
+    - name: Decide whether the tier still holds quorum
+      ansible.builtin.set_fact:
+        healthy_count: "{{ tier_hosts | selectattr('healthy') | list | length | int }}"
+        quorum: "{{ 'held' if (tier_hosts | selectattr('healthy') | list | length | int) >= (minimum | int) else 'broken' }}"
+
+    - name: Publish the tier check
+      ansible.builtin.set_stats:
+        per_host: false
+        data:
+          tier_name: "{{ tier_name }}"
+          healthy: "{{ healthy_count | int }}"
+          minimum: "{{ minimum | int }}"
+          quorum: "{{ quorum }}"
+
+    - name: Print the tier check
+      ansible.builtin.debug:
+        msg: "CONFIRM tier={{ tier_name }} instances={{ instance_count }} healthy={{ healthy_count }} minimum={{ minimum }} rule={{ minimum_rule }} quorum={{ quorum }}"

@@ -1,0 +1,18 @@
+---
+- name: Stop because another reboot would break quorum
+  hosts: all
+  gather_facts: false
+  run_once: true
+  vars_files:
+    - paths.yml
+  tasks:
+    - name: Load the service state
+      ansible.builtin.include_tasks: tasks/load_state.yml
+
+    - name: List hosts that still need a reboot
+      ansible.builtin.set_fact:
+        still_hosts: "{{ svc.hosts | selectattr('needs_reboot') | map(attribute='name') | list }}"
+
+    - name: Fail the round
+      ansible.builtin.fail:
+        msg: "QUORUM BLOCK. These hosts still need a reboot, and every tier is at its minimum: {{ still_hosts | join(',') }}"

@@ -1,0 +1,13 @@
+{
+  "service": "storefront",
+  "rounds_completed": 0,
+  "fault": {
+    "host": "",
+    "step": "",
+    "tier": "",
+    "remaining": 0
+  },
+  "hosts": [
+    {"name": "db-01", "tier": "db", "healthy": true, "needs_reboot": true}
+  ]
+}

@@ -1,0 +1,14 @@
+---
+# Floor for one tier. Caller sets tier_key (web, app, or db) and tier_hosts.
+# Web always keeps 1 available. App always keeps 2 available.
+# Database keeps count - 1 available, so at most one database is in the batch.
+# A single database is the quorum, so it stays up.
+- name: Compute the floor from the instance count
+  ansible.builtin.set_fact:
+    instance_count: "{{ count | int }}"
+    minimum: "{{ floor | int }}"
+    minimum_rule: "{{ rule }}"
+  vars:
+    count: "{{ tier_hosts | length }}"
+    floor: "{{ 1 if tier_key == 'web' else (2 if tier_key == 'app' else (count | int if (count | int) <= 1 else (count | int) - 1)) }}"
+    rule: "{{ 'keep-1' if tier_key == 'web' else ('keep-2' if tier_key == 'app' else ('keep-the-only-node' if (count | int) <= 1 else 'keep-count-minus-1')) }}"

@@ -1,0 +1,8 @@
+- name: Read the service state from the state host
+  ansible.builtin.slurp:
+    src: "{{ state_path }}"
+  register: state_raw
+
+- name: Parse the service state
+  ansible.builtin.set_fact:
+    svc: "{{ state_raw.content | b64decode | from_json }}"

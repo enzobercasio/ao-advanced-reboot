@@ -1,0 +1,65 @@
+---
+- name: Reset the storefront reboot lab
+  hosts: all
+  gather_facts: false
+  run_once: true
+  vars_files:
+    - paths.yml
+  vars:
+    scenario: happy
+    initial_state_file: "{{ playbook_dir }}/../state/storefront.initial.json"
+  tasks:
+    - name: Require a known scenario
+      ansible.builtin.assert:
+        that: scenario in ['happy', 'retry', 'hard', 'clear_fault', 'blocked']
+        fail_msg: "scenario must be happy, retry, hard, clear_fault, or blocked."
+
+    - name: Load the initial service
+      ansible.builtin.set_fact:
+        base: "{{ lookup('file', initial_state_file) | from_json }}"
+      when: scenario != 'clear_fault'
+
+    - name: Load the current service
+      ansible.builtin.include_tasks: tasks/load_state.yml
+      when: scenario == 'clear_fault'
+
+    - name: Use the current service as the base
+      ansible.builtin.set_fact:
+        base: "{{ svc }}"
+      when: scenario == 'clear_fault'
+
+    - name: Choose the fault
+      ansible.builtin.set_fact:
+        fault: "{{ scenarios[scenario].fault }}"
+      vars:
+        scenarios:
+          happy:
+            fault: {host: "", step: "", tier: "", remaining: 0}
+          retry:
+            fault: {host: "db-01", step: "shutdown", tier: "db", remaining: 1}
+          hard:
+            fault: {host: "db-01", step: "shutdown", tier: "db", remaining: 2}
+          clear_fault:
+            fault: {host: "", step: "", tier: "", remaining: 0}
+          blocked:
+            fault: {host: "", step: "", tier: "", remaining: 0}
+
+    - name: Sit the service on its floor
+      ansible.builtin.include_tasks: tasks/mark_at_floor.yml
+      when: scenario == 'blocked'
+
+    - name: Ensure the state directory exists
+      ansible.builtin.file:
+        path: "{{ state_path | dirname }}"
+        state: directory
+        mode: "0755"
+
+    - name: Write the working state
+      ansible.builtin.copy:
+        dest: "{{ state_path }}"
+        mode: "0644"
+        content: "{{ base | combine({'fault': fault}) | to_nice_json }}\n"
+
+    - name: Report the reset
+      ansible.builtin.debug:
+        msg: "RESET scenario={{ scenario }} state={{ state_path }}"

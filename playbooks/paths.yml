@@ -1,0 +1,2 @@
+state_path: "{{ reboot_state_file | default('/var/tmp/ao-reboot-demo/storefront.json', true) }}"
+plan_path: "{{ reboot_plan_file | default('/var/tmp/ao-reboot-demo/plan.json', true) }}"

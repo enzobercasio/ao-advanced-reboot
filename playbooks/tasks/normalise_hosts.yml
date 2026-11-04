@@ -1,0 +1,6 @@
+- name: Normalise host_list to a list
+  ansible.builtin.set_fact:
+    hosts_now: "{{ parsed_hosts }}"
+  vars:
+    raw_hosts: "{{ host_list | default([]) }}"
+    parsed_hosts: "{{ raw_hosts if (raw_hosts is sequence and raw_hosts is not string) else (raw_hosts | from_json) }}"
