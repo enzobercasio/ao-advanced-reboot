@@ -1,2 +1,11 @@
-state_path: "{{ reboot_state_file | default('/var/tmp/ao-reboot-demo/storefront.json', true) }}"
-plan_path: "{{ reboot_plan_file | default('/var/tmp/ao-reboot-demo/plan.json', true) }}"
+state_dir: "{{ reboot_state_dir | default('/var/tmp/ao-reboot-v2', true) }}"
+plan_path: "{{ state_dir }}/plan.json"
+
+# Tier policy as data. This is the only place the quorum rules live.
+#   keep:         always leave this many hosts healthy
+#   keep_all_but: leave all but this many healthy (never below 1)
+# Override per service with -e '{"tier_policy": {...}}' or a job template extra variable.
+tier_policy:
+  web: {keep: 1}
+  app: {keep: 2}
+  db: {keep_all_but: 1}

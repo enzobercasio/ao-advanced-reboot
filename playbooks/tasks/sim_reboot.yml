@@ -1,0 +1,56 @@
+---
+# LAB SHIM. A real reboot needs none of this: the host's own reboot and health
+# checks decide the outcome. Here the shim records the result in this tier's
+# state file so the planner has something to read, and injects faults.
+# It also does what a real playbook should do: skip a host that no longer needs
+# a reboot, so a retry or a restarted run never reboots a host twice.
+- name: Read this tier's state
+  ansible.builtin.slurp:
+    src: "{{ state_dir }}/{{ tier_name }}.json"
+  register: tier_raw
+
+- name: Work out what to do with this host
+  ansible.builtin.set_fact:
+    tier_state: "{{ tier_raw.content | b64decode | from_json }}"
+    sim_skipped: "{{ not (tier_raw.content | b64decode | from_json).hosts[target].needs_reboot }}"
+    sim_fault: "{{ (tier_raw.content | b64decode | from_json).faults[target] | default({'remaining': 0, 'mode': 'fail'}) }}"
+
+- name: Skip a host that does not need a reboot
+  ansible.builtin.debug:
+    msg: "SKIP {{ target }} no reboot required"
+  when: sim_skipped | bool
+
+- name: Simulated failure
+  when:
+    - not sim_skipped | bool
+    - (sim_fault.remaining | int) > 0
+  block:
+    - name: Record the failed attempt
+      ansible.builtin.copy:
+        dest: "{{ state_dir }}/{{ tier_name }}.json"
+        mode: "0644"
+        content: "{{ tier_state | combine({'faults': new_faults, 'hosts': new_hosts}) | to_nice_json }}\n"
+      vars:
+        new_faults: "{{ tier_state.faults | combine({target: sim_fault | combine({'remaining': (sim_fault.remaining | int) - 1})}) }}"
+        new_hosts: "{{ tier_state.hosts | combine({target: tier_state.hosts[target] | combine({'healthy': sim_fault.mode != 'no_return'})}) }}"
+
+    - name: Fail this reboot on purpose
+      ansible.builtin.fail:
+        msg: "SIMULATED FAILURE reboot {{ target }} mode={{ sim_fault.mode }} remaining_after={{ (sim_fault.remaining | int) - 1 }}"
+
+- name: Reboot succeeded
+  when:
+    - not sim_skipped | bool
+    - (sim_fault.remaining | int) == 0
+  block:
+    - name: Mark the host healthy and patched
+      ansible.builtin.copy:
+        dest: "{{ state_dir }}/{{ tier_name }}.json"
+        mode: "0644"
+        content: "{{ tier_state | combine({'hosts': new_hosts}) | to_nice_json }}\n"
+      vars:
+        new_hosts: "{{ tier_state.hosts | combine({target: {'healthy': true, 'needs_reboot': false}}) }}"
+
+    - name: Print the reboot
+      ansible.builtin.debug:
+        msg: "REBOOT {{ target }} tier={{ tier_name }} done"

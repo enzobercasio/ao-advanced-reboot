@@ -1,0 +1,22 @@
+---
+- name: Reboot one web host
+  block:
+    - name: Drain from the load balancer (dummy)
+      ansible.builtin.debug:
+        msg: "WEB drain {{ target }} from the load balancer"
+
+    - name: Reboot (the lab shim updates the state file)
+      ansible.builtin.include_tasks: tasks/sim_reboot.yml
+
+    - name: HTTP health check and put back in the load balancer (dummy)
+      ansible.builtin.debug:
+        msg: "WEB {{ target }} returned HTTP 200 and is back in the load balancer"
+      when: not sim_skipped | bool
+  rescue:
+    - name: Remember the failure so the other hosts still run
+      ansible.builtin.set_fact:
+        failed_hosts: "{{ failed_hosts + [target] }}"
+
+    - name: Print the failure
+      ansible.builtin.debug:
+        msg: "WEB FAILED {{ target }}: {{ ansible_failed_result.msg | default('unknown') }}"

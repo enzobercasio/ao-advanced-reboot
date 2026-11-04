@@ -1,0 +1,20 @@
+---
+- name: Status of this tier
+  ansible.builtin.include_tasks: tasks/tier_status.yml
+
+- name: Choose the hosts that can reboot without breaking the minimum
+  ansible.builtin.set_fact:
+    round_rows: "{{ round_rows | default([]) + [row] }}"
+    chosen_map: "{{ chosen_map | default({}) | combine({tier_key: chosen}) }}"
+  vars:
+    room: "{{ [(t_healthy | int) - (t_min | int), 0] | max }}"
+    max_allowed: "{{ [t_needing | length, room | int] | min }}"
+    chosen: "{{ t_needing[:(max_allowed | int)] }}"
+    row:
+      tier: "{{ tier_key }}"
+      instances: "{{ t_count | int }}"
+      healthy: "{{ t_healthy | int }}"
+      needs_reboot: "{{ t_needing | length }}"
+      minimum: "{{ t_min | int }}"
+      minimum_rule: "{{ t_rule }}"
+      max_allowed: "{{ max_allowed | int }}"

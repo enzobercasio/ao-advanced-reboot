@@ -1,0 +1,22 @@
+---
+- name: Reboot one app host
+  block:
+    - name: Stop the app service gracefully (dummy)
+      ansible.builtin.debug:
+        msg: "APP stop service on {{ target }} and wait for sessions to drain"
+
+    - name: Reboot (the lab shim updates the state file)
+      ansible.builtin.include_tasks: tasks/sim_reboot.yml
+
+    - name: Wait for the app port (dummy)
+      ansible.builtin.debug:
+        msg: "APP {{ target }} is listening on 8080 again"
+      when: not sim_skipped | bool
+  rescue:
+    - name: Remember the failure so the other hosts still run
+      ansible.builtin.set_fact:
+        failed_hosts: "{{ failed_hosts + [target] }}"
+
+    - name: Print the failure
+      ansible.builtin.debug:
+        msg: "APP FAILED {{ target }}: {{ ansible_failed_result.msg | default('unknown') }}"

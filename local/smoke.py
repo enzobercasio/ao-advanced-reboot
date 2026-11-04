@@ -1,425 +1,164 @@
 #!/usr/bin/env python3
-"""Run the dummy tasks in the order the Automation Orchestrator logic steps will.
+"""Emulate the Automation Orchestrator workflow on a laptop.
 
-The canvas, not this script, is what runs the While loop, For each loops,
-Condition, Switch, parallel confirms, and Converge. This script checks the
-data those steps will pass: batch order, empty-list skips, quorum held, a
-one-failure retry, and a two-failure stop.
+The canvas runs the While loop, Switch, the three parallel tier jobs and the
+Converge. This script does the same in the same order so the data they pass
+can be checked: batches per round, quorum, a one-failure retry, a two-failure
+stop with a restart, a host that never returns, and a fully blocked fleet.
+The three tier jobs run at the same time, as they do on the canvas.
 """
 
 import json
 import subprocess
 import sys
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-PLAYBOOKS = ROOT / "playbooks"
-LOG = Path(__file__).resolve().parent / "happy-path.log"
-
-EXPECTED = [
-    {
-        "rows": [
-            {"tier": "web", "instances": 4, "healthy": 4, "needs_reboot": 4, "minimum": 1, "minimum_rule": "keep-1", "max_allowed": 3},
-            {"tier": "app", "instances": 4, "healthy": 4, "needs_reboot": 4, "minimum": 2, "minimum_rule": "keep-2", "max_allowed": 2},
-            {"tier": "db", "instances": 3, "healthy": 3, "needs_reboot": 3, "minimum": 2, "minimum_rule": "keep-count-minus-1", "max_allowed": 1},
-        ],
-        "sum": 6,
-        "shutdown": {
-            "web": ["web-01", "web-02", "web-03"],
-            "app": ["app-01", "app-02"],
-            "db": ["db-01"],
-        },
-    },
-    {
-        "rows": [
-            {"tier": "web", "instances": 4, "healthy": 4, "needs_reboot": 1, "minimum": 1, "minimum_rule": "keep-1", "max_allowed": 1},
-            {"tier": "app", "instances": 4, "healthy": 4, "needs_reboot": 2, "minimum": 2, "minimum_rule": "keep-2", "max_allowed": 2},
-            {"tier": "db", "instances": 3, "healthy": 3, "needs_reboot": 2, "minimum": 2, "minimum_rule": "keep-count-minus-1", "max_allowed": 1},
-        ],
-        "sum": 4,
-        "shutdown": {
-            "web": ["web-04"],
-            "app": ["app-03", "app-04"],
-            "db": ["db-02"],
-        },
-    },
-    {
-        "rows": [
-            {"tier": "web", "instances": 4, "healthy": 4, "needs_reboot": 0, "minimum": 1, "minimum_rule": "keep-1", "max_allowed": 0},
-            {"tier": "app", "instances": 4, "healthy": 4, "needs_reboot": 0, "minimum": 2, "minimum_rule": "keep-2", "max_allowed": 0},
-            {"tier": "db", "instances": 3, "healthy": 3, "needs_reboot": 1, "minimum": 2, "minimum_rule": "keep-count-minus-1", "max_allowed": 1},
-        ],
-        "sum": 1,
-        "shutdown": {
-            "web": [],
-            "app": [],
-            "db": ["db-03"],
-        },
-    },
-]
+PLAYBOOKS = Path(__file__).resolve().parents[1] / "playbooks"
+TIERS = ["web", "app", "db"]
 
 
-def run(playbook, state, plan, extra=None, check=True):
-    cmd = [
-        "ansible-playbook",
-        str(PLAYBOOKS / playbook),
-        "-i", "localhost,",
-        "-c", "local",
-        "-e", f"reboot_state_file={state}",
-        "-e", f"reboot_plan_file={plan}",
-    ]
+def run(playbook, state_dir, extra=None):
+    cmd = ["ansible-playbook", str(PLAYBOOKS / playbook), "-i", "localhost,", "-c", "local",
+           "-e", f"reboot_state_dir={state_dir}"]
     if extra:
-        cmd.extend(["-e", json.dumps(extra)])
-    result = subprocess.run(cmd, text=True, capture_output=True)
-    output = result.stdout + result.stderr
-    if check and result.returncode != 0:
-        sys.stderr.write(output)
-        raise SystemExit(f"{playbook} failed with {result.returncode}")
-    return result.returncode, output
+        cmd += ["-e", json.dumps(extra)]
+    r = subprocess.run(cmd, text=True, capture_output=True)
+    return r.returncode, r.stdout + r.stderr
 
 
-def ints(row):
-    return {
-        "tier": row["tier"],
-        "instances": int(row["instances"]),
-        "healthy": int(row["healthy"]),
-        "needs_reboot": int(row["needs_reboot"]),
-        "minimum": int(row["minimum"]),
-        "minimum_rule": row["minimum_rule"],
-        "max_allowed": int(row["max_allowed"]),
-    }
-
-
-def load(path):
-    return json.loads(Path(path).read_text())
-
-
-def play_tier(playbook, state, plan, phase, tier, hosts, lines, events, db_failures_left):
-    if not list(hosts):
-        lines.append(f"LOGIC condition false: skip {phase} tier={tier} (empty host list)\n")
-        events.append((phase, tier, "skip"))
-        return db_failures_left, True
-    code, output = run(
-        playbook,
-        state,
-        plan,
-        {"tier_name": tier, "host_list": list(hosts)},
-        check=False,
-    )
-    lines.append(output)
+def must(playbook, state_dir, extra=None):
+    code, out = run(playbook, state_dir, extra)
     if code != 0:
-        if phase != "shutdown" or tier != "db" or "SIMULATED FAILURE" not in output:
-            sys.stderr.write(output)
-            raise SystemExit(f"unexpected {phase} failure on {tier}")
-        db_failures_left -= 1
-        code, output = run(
-            playbook,
-            state,
-            plan,
-            {"tier_name": tier, "host_list": list(hosts)},
-            check=False,
-        )
-        lines.append(output)
-        if code != 0:
-            events.append((phase, tier, "fail"))
-            return db_failures_left, False
-    events.append((phase, tier, "task"))
-    return db_failures_left, True
+        sys.stderr.write(out)
+        raise SystemExit(f"{playbook} failed")
+    return out
 
 
-def one_round(state, plan, lines, db_failures_left, events):
-    _, output = run("plan_round.yml", state, plan)
-    lines.append(output)
-    got = load(plan)
-    lines.append("LOGIC switch path=reboot\n")
-    lines.append("LOGIC for-each shutdown_batches order=web,app,db\n")
-    for batch in got["shutdown_batches"]:
-        db_failures_left, ok = play_tier(
-            "shutdown_tier.yml",
-            state,
-            plan,
-            "shutdown",
-            batch["tier"],
-            batch["hosts"],
-            lines,
-            events,
-            db_failures_left,
-        )
-        if not ok:
-            return got, db_failures_left, False
-    lines.append("LOGIC for-each startup_batches order=db,app,web\n")
-    for batch in got["startup_batches"]:
-        db_failures_left, ok = play_tier(
-            "startup_tier.yml",
-            state,
-            plan,
-            "startup",
-            batch["tier"],
-            batch["hosts"],
-            lines,
-            events,
-            db_failures_left,
-        )
-        if not ok:
-            return got, db_failures_left, False
-    lines.append("LOGIC parallel confirm_web confirm_app confirm_db\n")
-    for tier in ("web", "app", "db"):
-        _, output = run("confirm_tier.yml", state, plan, {"tier_name": tier})
-        lines.append(output)
-        if f"CONFIRM tier={tier}" not in output or "quorum=held" not in output:
-            sys.stderr.write(output)
-            raise SystemExit(f"confirm {tier} did not report quorum=held")
-    lines.append("LOGIC converge all branches\n")
-    lines.append("LOGIC condition still_safe true\n")
-    _, output = run("verify_round.yml", state, plan)
-    lines.append(output)
-    return got, db_failures_left, True
+def reset(state_dir, scenario="happy", fleet="default"):
+    must("reset_state.yml", state_dir, {"scenario": scenario, "fleet": fleet})
 
 
-def assert_plan(got, expected, label):
-    rows = [ints(row) for row in got["rows"]]
-    if rows != expected["rows"]:
-        raise SystemExit(f"{label} table mismatch:\n{rows}\n!=\n{expected['rows']}")
-    if int(got["max_eligible_sum"]) != expected["sum"]:
-        raise SystemExit(f"{label} sum {got['max_eligible_sum']} != {expected['sum']}")
-    if got["decision"] != "reboot":
-        raise SystemExit(f"{label} decision {got['decision']} != reboot")
-    for tier, hosts in expected["shutdown"].items():
-        if list(got[f"shutdown_{tier}"]) != hosts:
-            raise SystemExit(f"{label} shutdown {tier} {got[f'shutdown_{tier}']} != {hosts}")
-        if list(got[f"startup_{tier}"]) != hosts:
-            raise SystemExit(f"{label} startup list {tier} drifted")
-    shutdown_batches = [(batch["tier"], list(batch["hosts"])) for batch in got["shutdown_batches"]]
-    expected_shutdown = [(tier, hosts) for tier, hosts in expected["shutdown"].items()]
-    if shutdown_batches != expected_shutdown:
-        raise SystemExit(f"{label} shutdown_batches {shutdown_batches} != {expected_shutdown}")
-    startup_batches = [(batch["tier"], list(batch["hosts"])) for batch in got["startup_batches"]]
-    expected_startup = [("db", expected["shutdown"]["db"]), ("app", expected["shutdown"]["app"]), ("web", expected["shutdown"]["web"])]
-    if startup_batches != expected_startup:
-        raise SystemExit(f"{label} startup_batches {startup_batches} != {expected_startup}")
+def plan_of(state_dir):
+    return json.loads((Path(state_dir) / "plan.json").read_text())
 
 
-def happy(state, plan):
-    lines = []
-    events = []
-    run("reset_state.yml", state, plan, {"scenario": "happy"})
-    for index, expected in enumerate(EXPECTED, start=1):
-        before = len(events)
-        got, _, finished = one_round(state, plan, lines, 0, events)
-        if not finished:
-            raise SystemExit(f"happy path stopped in round {index}")
-        assert_plan(got, expected, f"round {index}")
-        got_logic = {
-            "shutdown": [(tier, action) for phase, tier, action in events[before:] if phase == "shutdown"],
-            "startup": [(tier, action) for phase, tier, action in events[before:] if phase == "startup"],
-        }
-        want = {
-            "shutdown": [(tier, "skip" if not hosts else "task") for tier, hosts in expected["shutdown"].items()],
-            "startup": [
-                (tier, "skip" if not expected["shutdown"][tier] else "task")
-                for tier in ("db", "app", "web")
-            ],
-        }
-        if got_logic != want:
-            raise SystemExit(f"round {index} logic path {got_logic} != {want}")
-    LOG.write_text("".join(lines))
-    _, output = run("plan_round.yml", state, plan)
-    final = load(plan)
-    if int(final["needs_reboot"]) != 0 or int(final["selected_count"]) != 0 or final["decision"] != "done":
-        raise SystemExit(f"expected a clear service, got {final['needs_reboot']} still needing reboot")
-    LOG.write_text("".join(lines))
-    print(f"happy path: 3 rounds matched the 4/4/3 sheet. Log: {LOG}")
+def tier_job(state_dir, tier, hosts, retries=1):
+    """One tier job with the workflow's retry policy (max_retries=1)."""
+    for attempt in range(retries + 1):
+        code, out = run(f"reboot_{tier}.yml", state_dir, {"host_list": hosts})
+        if code == 0:
+            return tier, True, attempt, out
+    return tier, False, retries, out
 
 
-def retry_once(state, plan):
-    run("reset_state.yml", state, plan, {"scenario": "retry"})
-    lines = []
-    got, left, finished = one_round(state, plan, lines, 1, [])
-    if not finished or left != 0:
-        raise SystemExit("retry scenario should fail shutdown once, then finish the round")
-    assert_plan(got, EXPECTED[0], "retry round 1")
-    if "SIMULATED FAILURE shutdown db-01" not in "".join(lines):
-        raise SystemExit("retry scenario did not record the simulated failure")
-    if "SHUTDOWN db-01 tier=db" not in "".join(lines):
-        raise SystemExit("retry scenario did not shut down db-01 after the retry")
-    for index, expected in enumerate(EXPECTED[1:], start=2):
-        got, _, finished = one_round(state, plan, lines, 0, [])
-        if not finished:
-            raise SystemExit(f"retry path stopped in round {index}")
-        assert_plan(got, expected, f"retry round {index}")
-    final = load(state)
-    if any(host["needs_reboot"] for host in final["hosts"]):
-        raise SystemExit("retry path left a host needing reboot")
-    print("retry path: db-01 failed once, the second shutdown succeeded, three rounds finished")
+def one_round(state_dir):
+    """plan_round -> Switch -> three parallel tier jobs -> Converge -> verify_round."""
+    must("plan_round.yml", state_dir)
+    plan = plan_of(state_dir)
+    if plan["decision"] == "done":
+        return plan, "done", {}
+    if plan["decision"] == "blocked":
+        code, out = run("report_blocked.yml", state_dir)
+        assert code != 0 and "BLOCKED" in out, "blocked path must fail with a reason"
+        return plan, "blocked", {}
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        futures = [pool.submit(tier_job, state_dir, t, plan[f"reboot_{t}"]) for t in TIERS]
+        results = {f.result()[0]: f.result()[1:] for f in futures}
+    if not all(ok for ok, _, _ in results.values()):
+        return plan, "failed", results
+    must("verify_round.yml", state_dir)
+    return plan, "ok", results
 
 
-def hard_stop(state, plan):
-    run("reset_state.yml", state, plan, {"scenario": "hard"})
-    before = load(state)
-    _, plan_out = run("plan_round.yml", state, plan)
-    got = load(plan)
-    code, output = run(
-        "shutdown_tier.yml",
-        state,
-        plan,
-        {"tier_name": "db", "host_list": got["shutdown_db"]},
-        check=False,
-    )
-    if code == 0 or "remaining_after=1" not in output:
-        raise SystemExit("hard fail: first attempt should leave one failure")
-    code, output = run(
-        "shutdown_tier.yml",
-        state,
-        plan,
-        {"tier_name": "db", "host_list": got["shutdown_db"]},
-        check=False,
-    )
-    if code == 0 or "remaining_after=0" not in output:
-        raise SystemExit("hard fail: second attempt should still fail")
-    after = load(state)
-    if [host["needs_reboot"] for host in after["hosts"]] != [host["needs_reboot"] for host in before["hosts"]]:
-        raise SystemExit("hard fail changed needs_reboot before a successful startup")
-    run("reset_state.yml", state, plan, {"scenario": "clear_fault"})
-    code, output = run(
-        "shutdown_tier.yml",
-        state,
-        plan,
-        {"tier_name": "db", "host_list": got["shutdown_db"]},
-    )
-    if "SHUTDOWN db-01 tier=db" not in output:
-        raise SystemExit("clear_fault did not allow the same shutdown to succeed")
-    print("hard stop: two failures left every host pending, and clear_fault lets the step succeed")
+def run_workflow(state_dir, max_iterations=6):
+    """The While loop. Returns the list of plans and how it ended."""
+    plans = []
+    for _ in range(max_iterations):
+        plan, status, results = one_round(state_dir)
+        if status in ("blocked", "failed"):
+            return plans, status, results
+        if status == "done":
+            return plans, "done", results
+        plans.append(plan)
+    return plans, "max_iterations", {}
 
 
-def blocked(state, plan):
-    run("reset_state.yml", state, plan, {"scenario": "blocked"})
-    run("plan_round.yml", state, plan)
-    got = load(plan)
-    if int(got["selected_count"]) != 0 or int(got["needs_reboot"]) != 11 or got["decision"] != "blocked":
-        raise SystemExit(f"blocked plan should select nobody, got {got['selected_count']} of {got['needs_reboot']}")
-    code, output = run("quorum_blocked.yml", state, plan, check=False)
-    if code == 0 or "QUORUM BLOCK" not in output:
-        raise SystemExit("quorum playbook should fail closed")
-    print("blocked path: each tier is already on its floor, so the plan selects nobody")
+def batch(plan):
+    return {t: plan[f"reboot_{t}"] for t in TIERS}
 
 
-FLEX = [
-    {
-        "rows": [
-            {"tier": "web", "instances": 6, "healthy": 6, "needs_reboot": 6, "minimum": 1, "minimum_rule": "keep-1", "max_allowed": 5},
-            {"tier": "app", "instances": 3, "healthy": 3, "needs_reboot": 3, "minimum": 2, "minimum_rule": "keep-2", "max_allowed": 1},
-            {"tier": "db", "instances": 5, "healthy": 5, "needs_reboot": 5, "minimum": 4, "minimum_rule": "keep-count-minus-1", "max_allowed": 1},
-        ],
-        "sum": 7,
-        "shutdown": {
-            "web": ["web-01", "web-02", "web-03", "web-04", "web-05"],
-            "app": ["app-01"],
-            "db": ["db-01"],
-        },
-    },
-    {
-        "rows": [
-            {"tier": "web", "instances": 6, "healthy": 6, "needs_reboot": 1, "minimum": 1, "minimum_rule": "keep-1", "max_allowed": 1},
-            {"tier": "app", "instances": 3, "healthy": 3, "needs_reboot": 2, "minimum": 2, "minimum_rule": "keep-2", "max_allowed": 1},
-            {"tier": "db", "instances": 5, "healthy": 5, "needs_reboot": 4, "minimum": 4, "minimum_rule": "keep-count-minus-1", "max_allowed": 1},
-        ],
-        "sum": 3,
-        "shutdown": {
-            "web": ["web-06"],
-            "app": ["app-02"],
-            "db": ["db-02"],
-        },
-    },
-    {
-        "rows": [
-            {"tier": "web", "instances": 6, "healthy": 6, "needs_reboot": 0, "minimum": 1, "minimum_rule": "keep-1", "max_allowed": 0},
-            {"tier": "app", "instances": 3, "healthy": 3, "needs_reboot": 1, "minimum": 2, "minimum_rule": "keep-2", "max_allowed": 1},
-            {"tier": "db", "instances": 5, "healthy": 5, "needs_reboot": 3, "minimum": 4, "minimum_rule": "keep-count-minus-1", "max_allowed": 1},
-        ],
-        "sum": 2,
-        "shutdown": {"web": [], "app": ["app-03"], "db": ["db-03"]},
-    },
-    {
-        "rows": [
-            {"tier": "web", "instances": 6, "healthy": 6, "needs_reboot": 0, "minimum": 1, "minimum_rule": "keep-1", "max_allowed": 0},
-            {"tier": "app", "instances": 3, "healthy": 3, "needs_reboot": 0, "minimum": 2, "minimum_rule": "keep-2", "max_allowed": 0},
-            {"tier": "db", "instances": 5, "healthy": 5, "needs_reboot": 2, "minimum": 4, "minimum_rule": "keep-count-minus-1", "max_allowed": 1},
-        ],
-        "sum": 1,
-        "shutdown": {"web": [], "app": [], "db": ["db-04"]},
-    },
-    {
-        "rows": [
-            {"tier": "web", "instances": 6, "healthy": 6, "needs_reboot": 0, "minimum": 1, "minimum_rule": "keep-1", "max_allowed": 0},
-            {"tier": "app", "instances": 3, "healthy": 3, "needs_reboot": 0, "minimum": 2, "minimum_rule": "keep-2", "max_allowed": 0},
-            {"tier": "db", "instances": 5, "healthy": 5, "needs_reboot": 1, "minimum": 4, "minimum_rule": "keep-count-minus-1", "max_allowed": 1},
-        ],
-        "sum": 1,
-        "shutdown": {"web": [], "app": [], "db": ["db-05"]},
-    },
-]
+def state(state_dir):
+    out = {}
+    for t in TIERS:
+        out.update(json.loads((Path(state_dir) / f"{t}.json").read_text())["hosts"])
+    return out
 
 
-def clear_selected(state, plan, got):
-    for batch in got["startup_batches"]:
-        if not list(batch["hosts"]):
-            continue
-        run(
-            "startup_tier.yml",
-            state,
-            plan,
-            {"tier_name": batch["tier"], "host_list": list(batch["hosts"])},
-        )
-
-
-def flex(state, plan):
-    run(
-        "reset_state.yml",
-        state,
-        plan,
-        {"scenario": "happy", "initial_state_file": str(ROOT / "state" / "storefront-flex.initial.json")},
-    )
-    for index, expected in enumerate(FLEX, start=1):
-        run("plan_round.yml", state, plan)
-        got = load(plan)
-        assert_plan(got, expected, f"flex round {index}")
-        clear_selected(state, plan, got)
-    run("plan_round.yml", state, plan)
-    done = load(plan)
-    if done["decision"] != "done" or int(done["needs_reboot"]) != 0:
-        raise SystemExit(f"flex fleet should finish clear, got {done['decision']} needs={done['needs_reboot']}")
-    print("flex path: 6 web, 3 app, 5 db kept 1 web, 2 app, and 4 databases")
-
-
-def solo_db(state, plan):
-    run(
-        "reset_state.yml",
-        state,
-        plan,
-        {"scenario": "happy", "initial_state_file": str(ROOT / "state" / "storefront-solo-db.initial.json")},
-    )
-    run("plan_round.yml", state, plan)
-    got = load(plan)
-    db = ints(got["rows"][2])
-    if db["instances"] != 1 or db["minimum"] != 1 or db["minimum_rule"] != "keep-the-only-node" or db["max_allowed"] != 0:
-        raise SystemExit(f"a single database should stay up, got {db}")
-    if int(got["selected_count"]) != 0 or got["decision"] != "blocked":
-        raise SystemExit(f"solo database plan should block, got {got['decision']} selected {got['selected_count']}")
-    print("solo database: the only node is the quorum, so the plan selects nobody")
+def expect(cond, msg):
+    if not cond:
+        raise SystemExit(f"FAIL: {msg}")
+    print(f"  ok  {msg}")
 
 
 def main():
-    with tempfile.TemporaryDirectory() as tmp:
-        state = str(Path(tmp) / "storefront.json")
-        plan = str(Path(tmp) / "plan.json")
-        happy(state, plan)
-        retry_once(state, plan)
-        hard_stop(state, plan)
-        blocked(state, plan)
-        flex(state, plan)
-        solo_db(state, plan)
-    print("smoke passed")
+    base = Path(tempfile.mkdtemp(prefix="ao-reboot-v2-"))
+
+    print("TC-1 happy path 4/4/3 -> rounds of 6, 4, 1")
+    d = str(base / "happy"); reset(d)
+    plans, end, _ = run_workflow(d)
+    expect([p["selected_count"] for p in plans] == [6, 4, 1], "rounds are 6, 4, 1")
+    expect(batch(plans[0]) == {"web": ["web-01", "web-02", "web-03"], "app": ["app-01", "app-02"], "db": ["db-01"]}, "round 1 batch")
+    expect(batch(plans[1]) == {"web": ["web-04"], "app": ["app-03", "app-04"], "db": ["db-02"]}, "round 2 batch")
+    expect(batch(plans[2]) == {"web": [], "app": [], "db": ["db-03"]}, "round 3 batch")
+    expect(end == "done" and not any(h["needs_reboot"] for h in state(d).values()), "ends done, nothing pending")
+
+    print("TC-2 one failure, the job retry heals it")
+    d = str(base / "retry"); reset(d, "retry")
+    plan, status, results = one_round(d)
+    expect(status == "ok" and results["web"][1] == 1, "web job needed exactly one retry")
+    expect(results["app"][1] == 0 and results["db"][1] == 0, "app and db jobs did not retry")
+    plans, end, _ = run_workflow(d)
+    expect(end == "done", "workflow finishes")
+
+    print("TC-3 two failures, the run stops, Retry run replans only what is pending")
+    d = str(base / "hard"); reset(d, "hard")
+    plan, status, results = one_round(d)
+    expect(status == "failed" and results["db"][0] is False, "db job fails after its retry")
+    expect(results["web"][0] and results["app"][0], "web and app finished in the same round")
+    s = state(d)
+    expect(s["db-01"]["needs_reboot"] and not s["web-01"]["needs_reboot"], "db-01 still pending, web-01 done")
+    plans, end, _ = run_workflow(d)
+    expect(plans[0]["reboot_web"] == ["web-04"] and plans[0]["reboot_db"] == ["db-01"], "restart plans only the pending hosts")
+    expect(end == "done", "restarted run finishes")
+
+    print("TC-4 blocked: every tier at its minimum")
+    d = str(base / "blocked"); reset(d, "blocked")
+    plans, end, _ = run_workflow(d)
+    expect(end == "blocked" and not plans, "run stops as blocked, nothing rebooted")
+
+    print("TC-5 other fleet 6/3/5 under the same policy")
+    d = str(base / "flex"); reset(d, fleet="flex")
+    plans, end, _ = run_workflow(d)
+    first = batch(plans[0])
+    expect((len(first["web"]), len(first["app"]), len(first["db"])) == (5, 1, 1), "first batch is 5, 1, 1")
+    expect(end == "done", "finishes")
+
+    print("TC-6 single database is never selected while others are")
+    d = str(base / "solo"); reset(d, fleet="solo_db")
+    must("plan_round.yml", d)
+    expect(plan_of(d)["reboot_db"] == [], "the only database stays up")
+
+    print("TC-8 a host that never returns shrinks the tier, the run stops safely")
+    d = str(base / "noreturn"); reset(d, "no_return")
+    plan, status, results = one_round(d)
+    expect(status == "failed" and results["app"][0] is False, "app job fails")
+    plans, end, _ = run_workflow(d)
+    expect(end in ("failed", "blocked"), f"run does not pretend to finish (ended {end})")
+    expect(not state(d)["app-01"]["healthy"], "app-01 stays marked unhealthy")
+
+    print("\nAll checks passed")
 
 
 if __name__ == "__main__":

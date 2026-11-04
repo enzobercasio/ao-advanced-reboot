@@ -1,0 +1,6 @@
+{% set ns = namespace(h={}) %}
+{% for i in range(1, (count | int) + 1) %}
+{% set name = '%s-%02d' % (tier, i) %}
+{% set _ = ns.h.update({name: {'healthy': name not in unhealthy, 'needs_reboot': true}}) %}
+{% endfor %}
+{{ {'tier': tier, 'faults': faults, 'hosts': ns.h} | to_nice_json }}
