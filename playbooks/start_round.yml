@@ -1,0 +1,12 @@
+---
+# One task so the switch can hand off to a normal step.
+# A switch case connects to one step. The output connector on this step
+# connects to reboot_web, reboot_app, and reboot_db, which start together.
+- name: Release the three tier jobs
+  hosts: all
+  gather_facts: false
+  run_once: true
+  tasks:
+    - name: Release the round
+      ansible.builtin.debug:
+        msg: "START tier jobs"
