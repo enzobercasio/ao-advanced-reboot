@@ -1,65 +1,64 @@
 ---
-- name: Reset the storefront reboot lab
+# Lab only. Writes a fresh state before a run.
+#   fleet:    default (4/4/3), flex (6/3/5) or solo_db (4/4/1)
+#   scenario: happy, retry, hard, no_return, blocked
+- name: Reset the lab state
   hosts: all
   gather_facts: false
   run_once: true
   vars_files:
     - paths.yml
   vars:
-    scenario: happy
-    initial_state_file: "{{ playbook_dir }}/../state/storefront.initial.json"
+    fleets:
+      default: {web: 4, app: 4, db: 3}
+      flex: {web: 6, app: 3, db: 5}
+      solo_db: {web: 4, app: 4, db: 1}
+    scenarios:
+      happy: {faults: {}, unhealthy: []}
+      # web-02 fails once. The job retry heals it.
+      retry:
+        faults: {web: {web-02: {remaining: 1, mode: fail}}}
+        unhealthy: []
+      # db-01 fails twice. The retry also fails, the run stops, Retry run heals it.
+      hard:
+        faults: {db: {db-01: {remaining: 2, mode: fail}}}
+        unhealthy: []
+      # app-01 never comes back healthy.
+      no_return:
+        faults: {app: {app-01: {remaining: 99, mode: no_return}}}
+        unhealthy: []
+      # Every tier already at its minimum.
+      blocked:
+        faults: {}
+        unhealthy: [web-02, web-03, web-04, app-03, app-04, db-03]
+    fleet_now: "{{ fleets[fleet | default('default')] }}"
+    scenario_now: "{{ scenarios[scenario | default('happy')] }}"
   tasks:
-    - name: Require a known scenario
-      ansible.builtin.assert:
-        that: scenario in ['happy', 'retry', 'hard', 'clear_fault', 'blocked']
-        fail_msg: "scenario must be happy, retry, hard, clear_fault, or blocked."
-
-    - name: Load the initial service
-      ansible.builtin.set_fact:
-        base: "{{ lookup('file', initial_state_file) | from_json }}"
-      when: scenario != 'clear_fault'
-
-    - name: Load the current service
-      ansible.builtin.include_tasks: tasks/load_state.yml
-      when: scenario == 'clear_fault'
-
-    - name: Use the current service as the base
-      ansible.builtin.set_fact:
-        base: "{{ svc }}"
-      when: scenario == 'clear_fault'
-
-    - name: Choose the fault
-      ansible.builtin.set_fact:
-        fault: "{{ scenarios[scenario].fault }}"
-      vars:
-        scenarios:
-          happy:
-            fault: {host: "", step: "", tier: "", remaining: 0}
-          retry:
-            fault: {host: "db-01", step: "shutdown", tier: "db", remaining: 1}
-          hard:
-            fault: {host: "db-01", step: "shutdown", tier: "db", remaining: 2}
-          clear_fault:
-            fault: {host: "", step: "", tier: "", remaining: 0}
-          blocked:
-            fault: {host: "", step: "", tier: "", remaining: 0}
-
-    - name: Sit the service on its floor
-      ansible.builtin.include_tasks: tasks/mark_at_floor.yml
-      when: scenario == 'blocked'
-
-    - name: Ensure the state directory exists
+    - name: Make the state directory
       ansible.builtin.file:
-        path: "{{ state_path | dirname }}"
+        path: "{{ state_dir }}"
         state: directory
         mode: "0755"
 
-    - name: Write the working state
-      ansible.builtin.copy:
-        dest: "{{ state_path }}"
+    - name: Write each tier
+      ansible.builtin.template:
+        src: tier_state.json.j2
+        dest: "{{ state_dir }}/{{ tier }}.json"
         mode: "0644"
-        content: "{{ base | combine({'fault': fault}) | to_nice_json }}\n"
+      vars:
+        count: "{{ fleet_now[tier] }}"
+        faults: "{{ scenario_now.faults[tier] | default({}) }}"
+        unhealthy: "{{ scenario_now.unhealthy }}"
+      loop: [web, app, db]
+      loop_control:
+        loop_var: tier
 
-    - name: Report the reset
+    - name: Write the round counter
+      ansible.builtin.copy:
+        dest: "{{ state_dir }}/meta.json"
+        mode: "0644"
+        content: "{{ {'service': 'storefront', 'rounds_completed': 0} | to_nice_json }}\n"
+
+    - name: Print the reset
       ansible.builtin.debug:
-        msg: "RESET scenario={{ scenario }} state={{ state_path }}"
+        msg: "RESET fleet={{ fleet | default('default') }} scenario={{ scenario | default('happy') }} web={{ fleet_now.web }} app={{ fleet_now.app }} db={{ fleet_now.db }}"

@@ -1,33 +1,47 @@
 ---
-- name: Recount hosts that still need a reboot
+- name: Recount after the round and check the minimums
   hosts: all
   gather_facts: false
   run_once: true
   vars_files:
     - paths.yml
   tasks:
-    - name: Load the service state
+    - name: Load the live state
       ansible.builtin.include_tasks: tasks/load_state.yml
 
-    - name: Count hosts that still need a reboot
+    - name: Status of each tier
+      ansible.builtin.include_tasks: tasks/verify_one_tier.yml
+      loop: [web, app, db]
+      loop_control:
+        loop_var: tier_key
+
+    - name: Work out the gate
       ansible.builtin.set_fact:
-        still_hosts: "{{ svc.hosts | selectattr('needs_reboot') | map(attribute='name') | list }}"
-        needs_reboot: "{{ svc.hosts | selectattr('needs_reboot') | list | length | int }}"
+        needs_reboot: "{{ pending_total | int }}"
+        quorum_ok: "{{ quorum_rows | selectattr('held') | list | length == quorum_rows | length }}"
+        gate: "{{ 'continue' if (pending_total | int) > 0 else 'done' }}"
+      vars:
+        pending_total: "{{ quorum_rows | map(attribute='pending') | map('int') | sum }}"
 
     - name: Record that this round finished
       ansible.builtin.copy:
-        dest: "{{ state_path }}"
+        dest: "{{ state_dir }}/meta.json"
         mode: "0644"
-        content: "{{ svc | combine({'rounds_completed': (svc.rounds_completed | int) + 1}) | to_nice_json }}\n"
+        content: "{{ meta | combine({'rounds_completed': (meta.rounds_completed | int) + 1}) | to_nice_json }}\n"
 
     - name: Publish the recount
       ansible.builtin.set_stats:
         per_host: false
         data:
           needs_reboot: "{{ needs_reboot | int }}"
-          still_hosts: "{{ still_hosts }}"
-          gate: "{{ 'continue' if (needs_reboot | int) > 0 else 'done' }}"
+          quorum: "{{ 'held' if quorum_ok | bool else 'broken' }}"
+          gate: "{{ gate }}"
 
     - name: Print the recount
       ansible.builtin.debug:
-        msg: "VERIFY needs_reboot={{ needs_reboot }} still={{ still_hosts | join(',') }}"
+        msg: "VERIFY needs_reboot={{ needs_reboot }} quorum={{ 'held' if quorum_ok | bool else 'broken' }} gate={{ gate }} {% for r in quorum_rows %}{{ r.tier }}={{ r.healthy }}/min{{ r.minimum }} {% endfor %}"
+
+    - name: Stop the run if any tier is below its minimum
+      ansible.builtin.assert:
+        that: quorum_ok | bool
+        fail_msg: "QUORUM BROKEN after the round. Stop and investigate before another round."

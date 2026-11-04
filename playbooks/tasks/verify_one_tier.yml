@@ -1,0 +1,14 @@
+---
+- name: Status of this tier
+  ansible.builtin.include_tasks: tasks/tier_status.yml
+
+- name: Record the tier against its minimum
+  ansible.builtin.set_fact:
+    quorum_rows: "{{ quorum_rows | default([]) + [row] }}"
+  vars:
+    row:
+      tier: "{{ tier_key }}"
+      healthy: "{{ t_healthy | int }}"
+      minimum: "{{ t_min | int }}"
+      pending: "{{ t_pending | int }}"
+      held: "{{ (t_healthy | int) >= (t_min | int) }}"

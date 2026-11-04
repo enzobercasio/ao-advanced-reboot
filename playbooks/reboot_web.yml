@@ -1,0 +1,31 @@
+---
+# STAND-IN for the customer's existing reboot playbook for the web tier (drain from the load balancer, reboot, HTTP check).
+# In the real environment this file is replaced by their playbook. The workflow
+# only needs the contract: it receives host_list and fails if any host fails.
+- name: Reboot the web tier hosts in host_list
+  hosts: all
+  gather_facts: false
+  run_once: true
+  vars_files:
+    - paths.yml
+  vars:
+    tier_name: web
+  tasks:
+    - name: Normalise the host list
+      ansible.builtin.include_tasks: tasks/normalise_hosts.yml
+
+    - name: No hosts for this tier this round
+      ansible.builtin.debug:
+        msg: "NOOP reboot tier=web"
+      when: hosts_now | length == 0
+
+    - name: Reboot each host
+      ansible.builtin.include_tasks: tasks/web_host.yml
+      loop: "{{ hosts_now }}"
+      loop_control:
+        loop_var: target
+
+    - name: Fail the job if any host did not reboot cleanly
+      ansible.builtin.fail:
+        msg: "web tier: {{ failed_hosts | join(',') }} did not reboot cleanly"
+      when: failed_hosts | length > 0

@@ -6,19 +6,32 @@
   vars_files:
     - paths.yml
   tasks:
-    - name: Load the service state
+    - name: Load the live state
       ansible.builtin.include_tasks: tasks/load_state.yml
 
-    - name: Select this round's batch
-      ansible.builtin.include_tasks: tasks/select_batch.yml
+    - name: Work out the room in each tier
+      ansible.builtin.include_tasks: tasks/plan_one_tier.yml
+      loop: [web, app, db]
+      loop_control:
+        loop_var: tier_key
 
-    - name: Label the path this round should take
+    - name: Assemble the round plan
       ansible.builtin.set_fact:
-        plan_out: "{{ plan_out | combine({'decision': decision}) }}"
+        plan_out:
+          round: "{{ (meta.rounds_completed | int) + 1 }}"
+          needs_reboot: "{{ pending_total }}"
+          selected_count: "{{ selected }}"
+          max_eligible_sum: "{{ round_rows | map(attribute='max_allowed') | map('int') | sum }}"
+          rows: "{{ round_rows }}"
+          reboot_web: "{{ chosen_map.web }}"
+          reboot_app: "{{ chosen_map.app }}"
+          reboot_db: "{{ chosen_map.db }}"
+          decision: "{{ 'reboot' if (selected | int) > 0 else ('blocked' if (pending_total | int) > 0 else 'done') }}"
       vars:
-        decision: "{{ 'reboot' if (plan_out.selected_count | int) > 0 else ('blocked' if (plan_out.needs_reboot | int) > 0 else 'done') }}"
+        pending_total: "{{ tiers.values() | map(attribute='hosts') | map('dict2items') | map('selectattr', 'value.needs_reboot') | map('list') | map('length') | sum }}"
+        selected: "{{ (chosen_map.web | length) + (chosen_map.app | length) + (chosen_map.db | length) }}"
 
-    - name: Publish the plan
+    - name: Keep a copy of the plan on the state host
       ansible.builtin.copy:
         dest: "{{ plan_path }}"
         mode: "0644"
@@ -31,7 +44,7 @@
 
     - name: Print the round header
       ansible.builtin.debug:
-        msg: "PLAN round={{ plan_out.round }} needs_reboot={{ plan_out.needs_reboot }} selected={{ plan_out.selected_count }} max_eligible_sum={{ plan_out.max_eligible_sum }}"
+        msg: "PLAN round={{ plan_out.round }} decision={{ plan_out.decision }} needs_reboot={{ plan_out.needs_reboot }} selected={{ plan_out.selected_count }} max_eligible_sum={{ plan_out.max_eligible_sum }}"
 
     - name: Print the round table
       ansible.builtin.debug:
@@ -40,6 +53,6 @@
       loop_control:
         label: "{{ item.tier }}"
 
-    - name: Print the batch in precedence order
+    - name: Print the batch (all tiers run together, no tier order)
       ansible.builtin.debug:
-        msg: "ORDER shutdown=web,app,db startup=db,app,web shutdown_web={{ plan_out.shutdown_web | join(',') }} shutdown_app={{ plan_out.shutdown_app | join(',') }} shutdown_db={{ plan_out.shutdown_db | join(',') }}"
+        msg: "BATCH web={{ plan_out.reboot_web | join(',') }} app={{ plan_out.reboot_app | join(',') }} db={{ plan_out.reboot_db | join(',') }}"

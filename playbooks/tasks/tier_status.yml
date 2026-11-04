@@ -1,0 +1,14 @@
+---
+# Caller sets tier_key (web, app or db) and has already included load_state.yml.
+# Sets: t_count, t_healthy, t_needing, t_pending, t_min, t_rule.
+- name: Read live counts and the policy for this tier
+  ansible.builtin.set_fact:
+    t_count: "{{ entries | length }}"
+    t_healthy: "{{ entries | selectattr('value.healthy') | list | length }}"
+    t_needing: "{{ entries | selectattr('value.healthy') | selectattr('value.needs_reboot') | map(attribute='key') | sort | list }}"
+    t_pending: "{{ entries | selectattr('value.needs_reboot') | list | length }}"
+    t_min: "{{ policy.keep | int if 'keep' in policy else ([(entries | length) - (policy.keep_all_but | int), 1] | max) }}"
+    t_rule: "{{ 'keep-' ~ policy.keep if 'keep' in policy else 'keep-all-but-' ~ policy.keep_all_but }}"
+  vars:
+    entries: "{{ tiers[tier_key].hosts | dict2items }}"
+    policy: "{{ tier_policy[tier_key] }}"

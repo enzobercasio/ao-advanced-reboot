@@ -1,8 +1,22 @@
-- name: Read the service state from the state host
+---
+# Each tier owns its own state file, so the three tier jobs can run at the same
+# time without overwriting each other. meta.json holds the round counter only.
+- name: Read meta and the three tier files
   ansible.builtin.slurp:
-    src: "{{ state_path }}"
+    src: "{{ state_dir }}/{{ item }}.json"
+  loop: [meta, web, app, db]
   register: state_raw
 
-- name: Parse the service state
+- name: Parse the round counter
   ansible.builtin.set_fact:
-    svc: "{{ state_raw.content | b64decode | from_json }}"
+    meta: "{{ state_raw.results[0].content | b64decode | from_json }}"
+    tiers: {}
+
+- name: Parse each tier
+  ansible.builtin.set_fact:
+    tiers: "{{ tiers | combine({parsed.tier: parsed}) }}"
+  vars:
+    parsed: "{{ item.content | b64decode | from_json }}"
+  loop: "{{ state_raw.results[1:] }}"
+  loop_control:
+    label: "{{ item.item }}"

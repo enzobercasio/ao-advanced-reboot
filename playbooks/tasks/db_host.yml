@@ -1,0 +1,22 @@
+---
+- name: Reboot one database host
+  block:
+    - name: Check replica lag before leaving the cluster (dummy)
+      ansible.builtin.debug:
+        msg: "DB {{ target }} replica lag 0s, safe to leave the cluster"
+
+    - name: Reboot (the lab shim updates the state file)
+      ansible.builtin.include_tasks: tasks/sim_reboot.yml
+
+    - name: Wait for the replica to catch up (dummy)
+      ansible.builtin.debug:
+        msg: "DB {{ target }} rejoined and replica is in sync"
+      when: not sim_skipped | bool
+  rescue:
+    - name: Remember the failure so the other hosts still run
+      ansible.builtin.set_fact:
+        failed_hosts: "{{ failed_hosts + [target] }}"
+
+    - name: Print the failure
+      ansible.builtin.debug:
+        msg: "DB FAILED {{ target }}: {{ ansible_failed_result.msg | default('unknown') }}"
